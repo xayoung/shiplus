@@ -47,8 +47,17 @@ jobs:
     - name: Install dependencies
       run: flutter pub get
 
-    - name: Analyze code
-      run: flutter analyze || echo "Analysis completed with warnings"
+    - name: Analyze code (optional)
+      run: flutter analyze || true
+      continue-on-error: true
+
+    - name: Prepare Windows assets
+      run: |
+        # 只保留 Windows 平台的可执行文件
+        Remove-Item -Path "assets/bin/N_m3u8DL-RE" -Force -ErrorAction SilentlyContinue
+        Remove-Item -Path "assets/bin/ffmpeg" -Force -ErrorAction SilentlyContinue
+        Write-Host "Windows assets prepared - keeping .exe files only"
+      shell: powershell
 
     - name: Build Windows Release
       run: flutter build windows --release --verbose
@@ -87,11 +96,19 @@ jobs:
     - name: Install dependencies
       run: flutter pub get
 
-    - name: Analyze code
-      run: flutter analyze || echo "Analysis completed with warnings"
+    - name: Analyze code (optional)
+      run: flutter analyze || true
+      continue-on-error: true
+
+    - name: Prepare macOS assets
+      run: |
+        # 只保留 macOS 平台的可执行文件
+        rm -f assets/bin/N_m3u8DL-RE.exe
+        rm -f assets/bin/ffmpeg.exe
+        echo "macOS assets prepared - keeping non-.exe files only"
 
     - name: Build macOS Release (Apple Silicon)
-      run: flutter build macos --release --verbose --dart-define=FLUTTER_TARGET_PLATFORM=darwin-arm64
+      run: flutter build macos --release --verbose
 
     - name: Create macOS release package
       run: |
@@ -132,8 +149,16 @@ jobs:
     - name: Install dependencies
       run: flutter pub get
 
-    - name: Analyze code
-      run: flutter analyze || echo "Analysis completed with warnings"
+    - name: Analyze code (optional)
+      run: flutter analyze || true
+      continue-on-error: true
+
+    - name: Prepare Linux assets
+      run: |
+        # 只保留 Linux 平台的可执行文件（与 macOS 相同，无 .exe 后缀）
+        rm -f assets/bin/N_m3u8DL-RE.exe
+        rm -f assets/bin/ffmpeg.exe
+        echo "Linux assets prepared - keeping non-.exe files only"
 
     - name: Build Linux Release
       run: flutter build linux --release --verbose

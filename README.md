@@ -30,9 +30,11 @@ flutter run --release -d windows
 ### 🤖 自动构建（推荐）
 
 本项目配置了 GitHub Actions 自动构建，支持：
-- ✅ Windows (x64)
-- ✅ macOS (Apple Silicon)
-- ⚠️ Linux (可选)
+- ✅ Windows (x64) - 仅包含 .exe 可执行文件
+- ✅ macOS (Apple Silicon) - 仅包含 macOS 可执行文件
+- ⚠️ Linux (可选) - 仅包含 Linux 可执行文件
+
+> 💡 **优化说明**: 每个平台的构建产物只包含对应平台的可执行文件，减少下载大小约 50-100MB
 
 #### 创建发布版本
 
