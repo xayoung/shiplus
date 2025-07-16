@@ -27,10 +27,10 @@
 - **系统要求**: Windows 10+ (x64)
 
 ### macOS 版本
-- **文件名**: `shiplus-macos-universal.zip`
+- **文件名**: `shiplus-macos-arm64.zip`
 - **包含内容**:
   - `shiplus.app` - macOS 应用包
-- **系统要求**: macOS 10.14+
+- **系统要求**: macOS 11.0+ (Apple Silicon)
 
 ## 🏷️ 创建发布版本
 

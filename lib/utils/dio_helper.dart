@@ -1,7 +1,6 @@
 import 'package:dio/dio.dart';
 import 'package:cookie_jar/cookie_jar.dart';
 import 'package:dio_cookie_manager/dio_cookie_manager.dart';
-import 'dart:developer' as developer;
 
 /// Dio 工具类，用于创建 Dio 实例
 class DioHelper {
@@ -21,8 +20,7 @@ class DioHelper {
           handler.next(options);
         },
         onResponse: (response, handler) {
-          developer
-              .log('Response received from: ${response.requestOptions.uri}');
+          print('Response received from: ${response.requestOptions.uri}');
           _printCookiesForUrl(cookieJar, response.requestOptions.uri);
           handler.next(response);
         },
@@ -49,15 +47,15 @@ class DioHelper {
     try {
       final cookies = await cookieJar.loadForRequest(uri);
       if (cookies.isNotEmpty) {
-        developer.log('🍪 Cookies for ${uri.host}:');
+        print('🍪 Cookies for ${uri.host}:');
         for (final cookie in cookies) {
-          developer.log('  ${cookie.name}=${cookie.value}');
+          print('  ${cookie.name}=${cookie.value}');
         }
       } else {
-        developer.log('🍪 No cookies found for ${uri.host}');
+        print('🍪 No cookies found for ${uri.host}');
       }
     } catch (e) {
-      developer.log('❌ Error reading cookies for ${uri.host}: $e');
+      print('❌ Error reading cookies for ${uri.host}: $e');
     }
   }
 
@@ -66,10 +64,10 @@ class DioHelper {
     try {
       // 注意：CookieJar 没有直接获取所有 cookies 的方法
       // 这里只能打印提示信息
-      developer.log(
+      print(
           '🍪 Cookie jar is active. Use printCookiesForUrl() to check specific URLs.');
     } catch (e) {
-      developer.log('❌ Error accessing cookie jar: $e');
+      print('❌ Error accessing cookie jar: $e');
     }
   }
 }

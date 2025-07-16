@@ -10,7 +10,7 @@ class HttpDebugService {
     if (_dio != null) return;
 
     _dio = Dio();
-    
+
     // 最基本的配置
     _dio!.options = BaseOptions(
       connectTimeout: const Duration(seconds: 15),
@@ -68,7 +68,8 @@ class HttpDebugService {
     try {
       print('🔍 [DEBUG] Testing HTTP connection...');
       final response = await _dio!.get('http://httpbin.org/get');
-      print('✅ [DEBUG] HTTP connection test successful: ${response.statusCode}');
+      print(
+          '✅ [DEBUG] HTTP connection test successful: ${response.statusCode}');
       return true;
     } catch (e) {
       print('❌ [DEBUG] HTTP connection test failed: $e');
@@ -80,7 +81,8 @@ class HttpDebugService {
   static Future<bool> testTargetApi() async {
     try {
       print('🔍 [DEBUG] Testing target API...');
-      final response = await _dio!.get('https://nodeapi.histreams.net/api/f1/compage/493');
+      final response =
+          await _dio!.get('https://nodeapi.histreams.net/api/f1/compage/493');
       print('✅ [DEBUG] Target API test successful: ${response.statusCode}');
       return true;
     } catch (e) {
@@ -94,7 +96,7 @@ class HttpDebugService {
     final rawDio = Dio();
     rawDio.options.connectTimeout = const Duration(seconds: 10);
     rawDio.options.receiveTimeout = const Duration(seconds: 10);
-    
+
     rawDio.interceptors.add(
       InterceptorsWrapper(
         onRequest: (options, handler) {
@@ -111,16 +113,16 @@ class HttpDebugService {
         },
       ),
     );
-    
+
     return rawDio;
   }
 
   /// 运行完整的诊断测试
   static Future<Map<String, bool>> runDiagnostics() async {
     final results = <String, bool>{};
-    
+
     print('🔍 [DEBUG] Starting network diagnostics...');
-    
+
     // 测试1: 原生Dio
     try {
       final rawDio = createRawDio();
@@ -130,16 +132,16 @@ class HttpDebugService {
       results['raw_dio'] = false;
       print('❌ [DEBUG] Raw Dio test failed: $e');
     }
-    
+
     // 测试2: HTTP连接
     results['http_connection'] = await testHttpConnection();
-    
+
     // 测试3: HTTPS连接
     results['https_connection'] = await testConnection();
-    
+
     // 测试4: 目标API
     results['target_api'] = await testTargetApi();
-    
+
     print('🔍 [DEBUG] Diagnostics complete: $results');
     return results;
   }

@@ -21,7 +21,7 @@ class _DownloadPageState extends State<DownloadPage> {
   final List<String> _downloadLogs = [];
   final ScrollController _logScrollController = ScrollController();
   bool _showAdvancedOptions = false;
-  
+
   // 添加进度状态变量
   DownloadProgress? _videoProgress;
   DownloadProgress? _audioProgress;
@@ -92,7 +92,7 @@ class _DownloadPageState extends State<DownloadPage> {
   Future<void> _startDownload() async {
     final url = _urlController.text.trim();
     final fileName = _fileNameController.text.trim();
-    
+
     if (url.isEmpty || fileName.isEmpty) {
       _showErrorSnackBar('请输入URL和文件名');
       return;
@@ -116,10 +116,10 @@ class _DownloadPageState extends State<DownloadPage> {
       setState(() {
         _downloadStatus = '正在下载视频，请稍候...';
       });
-      
+
       await DownloadService.downloadVideo(
         url,
-        _currentPath,  // 使用当前路径
+        _currentPath, // 使用当前路径
         fileName,
         extraArgs: _parseExtraArgs(_extraArgsController.text),
         onLog: (log) {
@@ -147,17 +147,17 @@ class _DownloadPageState extends State<DownloadPage> {
           });
         },
       );
-      
+
       if (mounted) {
         setState(() {
           _downloadStatus = '下载完成！';
         });
         _showSuccessSnackBar('视频下载完成');
-        
+
         // 清空输入框
         _urlController.clear();
         _fileNameController.clear();
-        
+
         // 3秒后清空日志
         Future.delayed(const Duration(seconds: 3), () {
           if (mounted) {
@@ -180,7 +180,7 @@ class _DownloadPageState extends State<DownloadPage> {
         setState(() {
           _isDownloading = false;
         });
-        
+
         // 3秒后清除状态信息
         Future.delayed(const Duration(seconds: 3), () {
           if (mounted) {
@@ -199,13 +199,16 @@ class _DownloadPageState extends State<DownloadPage> {
         if (_videoProgress != null) ...[
           Text('视频: ${_videoProgress!.quality}'),
           LinearProgressIndicator(value: _videoProgress!.percentage / 100),
-          Text('${_videoProgress!.currentSegment}/${_videoProgress!.totalSegments} (${_videoProgress!.percentage.toStringAsFixed(1)}%)'),
-          Text('${_videoProgress!.downloadedSize}/${_videoProgress!.totalSize} - ${_videoProgress!.speed} - ETA: ${_videoProgress!.eta}'),
+          Text(
+              '${_videoProgress!.currentSegment}/${_videoProgress!.totalSegments} (${_videoProgress!.percentage.toStringAsFixed(1)}%)'),
+          Text(
+              '${_videoProgress!.downloadedSize}/${_videoProgress!.totalSize} - ${_videoProgress!.speed} - ETA: ${_videoProgress!.eta}'),
         ],
         if (_audioProgress != null) ...[
           Text('音频: ${_audioProgress!.quality}'),
           LinearProgressIndicator(value: _audioProgress!.percentage / 100),
-          Text('${_audioProgress!.currentSegment}/${_audioProgress!.totalSegments} (${_audioProgress!.percentage.toStringAsFixed(1)}%)'),
+          Text(
+              '${_audioProgress!.currentSegment}/${_audioProgress!.totalSegments} (${_audioProgress!.percentage.toStringAsFixed(1)}%)'),
         ],
       ],
     );
@@ -290,7 +293,7 @@ class _DownloadPageState extends State<DownloadPage> {
               ),
             ),
             const SizedBox(height: 16),
-            
+
             // 下载表单卡片
             Card(
               child: Padding(
@@ -326,7 +329,7 @@ class _DownloadPageState extends State<DownloadPage> {
                       enabled: !_isDownloading,
                     ),
                     const SizedBox(height: 16),
-                    
+
                     // 高级选项切换
                     InkWell(
                       onTap: () {
@@ -337,15 +340,15 @@ class _DownloadPageState extends State<DownloadPage> {
                       child: Row(
                         children: [
                           Icon(
-                            _showAdvancedOptions 
-                                ? Icons.keyboard_arrow_down 
+                            _showAdvancedOptions
+                                ? Icons.keyboard_arrow_down
                                 : Icons.keyboard_arrow_right,
                           ),
                           const Text('高级选项'),
                         ],
                       ),
                     ),
-                    
+
                     // 高级选项内容
                     if (_showAdvancedOptions) ...[
                       const SizedBox(height: 16),
@@ -360,15 +363,15 @@ class _DownloadPageState extends State<DownloadPage> {
                         maxLines: 2,
                       ),
                     ],
-                    
+
                     const SizedBox(height: 20),
                     SizedBox(
                       width: double.infinity,
                       child: ElevatedButton(
                         onPressed: _isDownloading ? null : _startDownload,
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: _isDownloading 
-                              ? Colors.grey 
+                          backgroundColor: _isDownloading
+                              ? Colors.grey
                               : Theme.of(context).primaryColor,
                           padding: const EdgeInsets.symmetric(vertical: 16),
                         ),
@@ -381,23 +384,26 @@ class _DownloadPageState extends State<DownloadPage> {
                                     height: 20,
                                     child: CircularProgressIndicator(
                                       strokeWidth: 2,
-                                      valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                                      valueColor: AlwaysStoppedAnimation<Color>(
+                                          Colors.white),
                                     ),
                                   ),
                                   SizedBox(width: 12),
-                                  Text('下载中...', style: TextStyle(color: Colors.white)),
+                                  Text('下载中...',
+                                      style: TextStyle(color: Colors.white)),
                                 ],
                               )
-                            : const Text('开始下载', style: TextStyle(color: Colors.white)),
+                            : const Text('开始下载',
+                                style: TextStyle(color: Colors.white)),
                       ),
                     ),
                   ],
                 ),
               ),
             ),
-            
+
             const SizedBox(height: 16),
-            
+
             // 下载状态显示
             if (_downloadStatus.isNotEmpty) ...[
               Card(
@@ -406,13 +412,13 @@ class _DownloadPageState extends State<DownloadPage> {
                   child: Row(
                     children: [
                       Icon(
-                        _downloadStatus.contains('失败') 
-                            ? Icons.error 
+                        _downloadStatus.contains('失败')
+                            ? Icons.error
                             : _downloadStatus.contains('完成')
                                 ? Icons.check_circle
                                 : Icons.info,
-                        color: _downloadStatus.contains('失败') 
-                            ? Colors.red 
+                        color: _downloadStatus.contains('失败')
+                            ? Colors.red
                             : _downloadStatus.contains('完成')
                                 ? Colors.green
                                 : Colors.blue,
@@ -423,8 +429,8 @@ class _DownloadPageState extends State<DownloadPage> {
                           _downloadStatus,
                           style: TextStyle(
                             fontWeight: FontWeight.w500,
-                            color: _downloadStatus.contains('失败') 
-                                ? Colors.red 
+                            color: _downloadStatus.contains('失败')
+                                ? Colors.red
                                 : _downloadStatus.contains('完成')
                                     ? Colors.green
                                     : null,
@@ -437,7 +443,7 @@ class _DownloadPageState extends State<DownloadPage> {
               ),
               const SizedBox(height: 16),
             ],
-            
+
             // 进度显示
             if (_videoProgress != null || _audioProgress != null) ...[
               Card(
@@ -461,7 +467,7 @@ class _DownloadPageState extends State<DownloadPage> {
               ),
               const SizedBox(height: 16),
             ],
-            
+
             // 下载日志显示
             if (_downloadLogs.isNotEmpty) ...[
               Card(
@@ -506,12 +512,14 @@ class _DownloadPageState extends State<DownloadPage> {
                             Color textColor = Colors.white;
                             if (log.contains('ERROR') || log.contains('❌')) {
                               textColor = Colors.red;
-                            } else if (log.contains('🎉') || log.contains('完成')) {
+                            } else if (log.contains('🎉') ||
+                                log.contains('完成')) {
                               textColor = Colors.green;
-                            } else if (log.contains('🚀') || log.contains('开始')) {
+                            } else if (log.contains('🚀') ||
+                                log.contains('开始')) {
                               textColor = Colors.blue;
                             }
-                            
+
                             return Padding(
                               padding: const EdgeInsets.symmetric(vertical: 1),
                               child: Text(

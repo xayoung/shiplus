@@ -46,7 +46,10 @@ jobs:
       
     - name: Install dependencies
       run: flutter pub get
-      
+
+    - name: Analyze code
+      run: flutter analyze || echo "Analysis completed with warnings"
+
     - name: Build Windows Release
       run: flutter build windows --release --verbose
       
@@ -83,20 +86,23 @@ jobs:
       
     - name: Install dependencies
       run: flutter pub get
-      
-    - name: Build macOS Release
-      run: flutter build macos --release --verbose
-      
+
+    - name: Analyze code
+      run: flutter analyze || echo "Analysis completed with warnings"
+
+    - name: Build macOS Release (Apple Silicon)
+      run: flutter build macos --release --verbose --dart-define=FLUTTER_TARGET_PLATFORM=darwin-arm64
+
     - name: Create macOS release package
       run: |
         cd build/macos/Build/Products/Release
-        zip -r ../../../../../shiplus-macos-universal.zip shiplus.app
-        
+        zip -r ../../../../../shiplus-macos-arm64.zip shiplus.app
+
     - name: Upload macOS artifacts
       uses: actions/upload-artifact@v4
       with:
-        name: shiplus-macos-universal
-        path: shiplus-macos-universal.zip
+        name: shiplus-macos-arm64
+        path: shiplus-macos-arm64.zip
         retention-days: 30
 
   # Linux 构建
@@ -125,7 +131,10 @@ jobs:
       
     - name: Install dependencies
       run: flutter pub get
-      
+
+    - name: Analyze code
+      run: flutter analyze || echo "Analysis completed with warnings"
+
     - name: Build Linux Release
       run: flutter build linux --release --verbose
       
@@ -156,7 +165,7 @@ jobs:
       with:
         files: |
           shiplus-windows-x64/shiplus-windows-x64.zip
-          shiplus-macos-universal/shiplus-macos-universal.zip
+          shiplus-macos-arm64/shiplus-macos-arm64.zip
         name: Release ${{ github.ref_name }}
         body: |
           ## 🚀 Shiplus ${{ github.ref_name }}
@@ -167,11 +176,11 @@ jobs:
           - 下载: `shiplus-windows-x64.zip`
           - 解压后运行 `shiplus.exe`
           - 系统要求: Windows 10+ (x64)
-          
-          #### macOS (Universal)
-          - 下载: `shiplus-macos-universal.zip`
+
+          #### macOS (Apple Silicon)
+          - 下载: `shiplus-macos-arm64.zip`
           - 解压后运行 `shiplus.app`
-          - 系统要求: macOS 10.14+
+          - 系统要求: macOS 11.0+ (M1/M2/M3 芯片)
           
           ### 🔧 安装步骤
           1. 根据你的操作系统下载对应的压缩包

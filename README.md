@@ -31,7 +31,7 @@ flutter run --release -d windows
 
 本项目配置了 GitHub Actions 自动构建，支持：
 - ✅ Windows (x64)
-- ✅ macOS (Universal)
+- ✅ macOS (Apple Silicon)
 - ⚠️ Linux (可选)
 
 #### 创建发布版本
@@ -97,8 +97,8 @@ flutter build linux --release
 - x64 架构
 
 ### macOS
-- macOS 10.14 或更高版本
-- Intel 或 Apple Silicon
+- macOS 11.0 或更高版本
+- Apple Silicon (M1/M2/M3 芯片)
 
 ### Linux
 - Ubuntu 18.04+ 或等效发行版
