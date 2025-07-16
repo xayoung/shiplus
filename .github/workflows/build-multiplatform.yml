@@ -1,0 +1,187 @@
+name: Build Multi-Platform Release
+
+on:
+  push:
+    branches: [ main, master ]
+    tags: [ 'v*' ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:
+    inputs:
+      build_windows:
+        description: 'Build Windows'
+        required: false
+        default: true
+        type: boolean
+      build_macos:
+        description: 'Build macOS'
+        required: false
+        default: true
+        type: boolean
+      build_linux:
+        description: 'Build Linux'
+        required: false
+        default: false
+        type: boolean
+
+jobs:
+  # Windows 构建
+  build-windows:
+    if: github.event.inputs.build_windows != 'false'
+    runs-on: windows-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      
+    - name: Setup Flutter
+      uses: subosito/flutter-action@v2
+      with:
+        flutter-version: '3.19.4'
+        channel: 'stable'
+        cache: true
+        
+    - name: Enable Windows desktop
+      run: flutter config --enable-windows-desktop
+      
+    - name: Install dependencies
+      run: flutter pub get
+      
+    - name: Build Windows Release
+      run: flutter build windows --release --verbose
+      
+    - name: Create Windows release package
+      run: |
+        cd build/windows/runner/Release
+        7z a -tzip ../../../../shiplus-windows-x64.zip *
+        
+    - name: Upload Windows artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: shiplus-windows-x64
+        path: shiplus-windows-x64.zip
+        retention-days: 30
+
+  # macOS 构建
+  build-macos:
+    if: github.event.inputs.build_macos != 'false'
+    runs-on: macos-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      
+    - name: Setup Flutter
+      uses: subosito/flutter-action@v2
+      with:
+        flutter-version: '3.19.4'
+        channel: 'stable'
+        cache: true
+        
+    - name: Enable macOS desktop
+      run: flutter config --enable-macos-desktop
+      
+    - name: Install dependencies
+      run: flutter pub get
+      
+    - name: Build macOS Release
+      run: flutter build macos --release --verbose
+      
+    - name: Create macOS release package
+      run: |
+        cd build/macos/Build/Products/Release
+        zip -r ../../../../../shiplus-macos-universal.zip shiplus.app
+        
+    - name: Upload macOS artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: shiplus-macos-universal
+        path: shiplus-macos-universal.zip
+        retention-days: 30
+
+  # Linux 构建
+  build-linux:
+    if: github.event.inputs.build_linux == 'true'
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      
+    - name: Install Linux dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev
+        
+    - name: Setup Flutter
+      uses: subosito/flutter-action@v2
+      with:
+        flutter-version: '3.19.4'
+        channel: 'stable'
+        cache: true
+        
+    - name: Enable Linux desktop
+      run: flutter config --enable-linux-desktop
+      
+    - name: Install dependencies
+      run: flutter pub get
+      
+    - name: Build Linux Release
+      run: flutter build linux --release --verbose
+      
+    - name: Create Linux release package
+      run: |
+        cd build/linux/x64/release/bundle
+        tar -czf ../../../../../shiplus-linux-x64.tar.gz *
+        
+    - name: Upload Linux artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: shiplus-linux-x64
+        path: shiplus-linux-x64.tar.gz
+        retention-days: 30
+
+  # 创建 GitHub Release
+  create-release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [build-windows, build-macos]
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Download all artifacts
+      uses: actions/download-artifact@v4
+      
+    - name: Create Release
+      uses: softprops/action-gh-release@v1
+      with:
+        files: |
+          shiplus-windows-x64/shiplus-windows-x64.zip
+          shiplus-macos-universal/shiplus-macos-universal.zip
+        name: Release ${{ github.ref_name }}
+        body: |
+          ## 🚀 Shiplus ${{ github.ref_name }}
+          
+          ### 📦 下载说明
+          
+          #### Windows (x64)
+          - 下载: `shiplus-windows-x64.zip`
+          - 解压后运行 `shiplus.exe`
+          - 系统要求: Windows 10+ (x64)
+          
+          #### macOS (Universal)
+          - 下载: `shiplus-macos-universal.zip`
+          - 解压后运行 `shiplus.app`
+          - 系统要求: macOS 10.14+
+          
+          ### 🔧 安装步骤
+          1. 根据你的操作系统下载对应的压缩包
+          2. 解压到任意文件夹
+          3. 运行主程序文件
+          
+          ### ⚠️ 注意事项
+          - 首次运行可能需要允许应用程序通过防火墙
+          - macOS 用户可能需要在"系统偏好设置 > 安全性与隐私"中允许应用运行
+        draft: false
+        prerelease: false
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

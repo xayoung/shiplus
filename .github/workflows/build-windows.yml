@@ -1,0 +1,78 @@
+name: Build Windows Release
+
+on:
+  push:
+    branches: [ main, master ]
+    tags: [ 'v*' ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:  # 允许手动触发
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      
+    - name: Setup Flutter
+      uses: subosito/flutter-action@v2
+      with:
+        flutter-version: '3.19.4'
+        channel: 'stable'
+        cache: true
+        
+    - name: Enable Windows desktop
+      run: flutter config --enable-windows-desktop
+      
+    - name: Install dependencies
+      run: flutter pub get
+      
+    - name: Analyze code
+      run: flutter analyze
+      
+    - name: Run tests
+      run: flutter test
+      
+    - name: Build Windows Release
+      run: flutter build windows --release
+      
+    - name: Create release archive
+      run: |
+        cd build/windows/runner/Release
+        7z a -tzip ../../../../shiplus-windows-release.zip *
+        
+    - name: Upload Windows build artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: shiplus-windows-release
+        path: shiplus-windows-release.zip
+        retention-days: 30
+        
+    - name: Create Release (on tag)
+      if: startsWith(github.ref, 'refs/tags/v')
+      uses: softprops/action-gh-release@v1
+      with:
+        files: shiplus-windows-release.zip
+        name: Release ${{ github.ref_name }}
+        body: |
+          ## Windows Release
+          
+          ### 安装说明
+          1. 下载 `shiplus-windows-release.zip`
+          2. 解压到任意文件夹
+          3. 运行 `shiplus.exe`
+          
+          ### 系统要求
+          - Windows 10 或更高版本
+          - x64 架构
+          
+          ### 包含文件
+          - `shiplus.exe` - 主程序
+          - `flutter_windows.dll` - Flutter 运行时
+          - `data/` - 应用资源文件
+        draft: false
+        prerelease: false
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
