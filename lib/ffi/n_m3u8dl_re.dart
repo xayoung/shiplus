@@ -11,22 +11,18 @@ class N_m3u8DL_RE {
   static final Map<String, Process> _runningProcesses = {};
 
   static Future<String> get _execPath async {
-    if (Platform.isWindows) {
-      return 'N_m3u8DL-RE.exe';
-    }
-
     // 获取应用程序的支持目录
     final appSupportDir = await getApplicationSupportDirectory();
     if (!appSupportDir.existsSync()) {
       appSupportDir.createSync(recursive: true);
     }
 
-    // 检查可执行文件是否已经在应用程序支持目录中
-    final execInAppSupport = File('${appSupportDir.path}/N_m3u8DL-RE');
+    // 确定可执行文件名和路径
+    final execName = Platform.isWindows ? 'N_m3u8DL-RE.exe' : 'N_m3u8DL-RE';
+    final execInAppSupport = File('${appSupportDir.path}/$execName');
     if (!execInAppSupport.existsSync()) {
       try {
         // 从assets中加载可执行文件
-        final execName = Platform.isWindows ? 'N_m3u8DL-RE.exe' : 'N_m3u8DL-RE';
         final assetPath = 'assets/bin/$execName';
 
         print('从assets加载可执行文件: $assetPath');
@@ -80,12 +76,12 @@ class N_m3u8DL_RE {
       appSupportDir.createSync(recursive: true);
     }
 
-    // 检查ffmpeg可执行文件是否已经在应用程序支持目录中
-    final ffmpegInAppSupport = File('${appSupportDir.path}/ffmpeg');
+    // 确定ffmpeg可执行文件名和路径
+    final ffmpegName = Platform.isWindows ? 'ffmpeg.exe' : 'ffmpeg';
+    final ffmpegInAppSupport = File('${appSupportDir.path}/$ffmpegName');
     if (!ffmpegInAppSupport.existsSync()) {
       try {
         // 从assets中加载ffmpeg可执行文件
-        final ffmpegName = Platform.isWindows ? 'ffmpeg.exe' : 'ffmpeg';
         final assetPath = 'assets/bin/$ffmpegName';
 
         print('从assets加载ffmpeg可执行文件: $assetPath');
