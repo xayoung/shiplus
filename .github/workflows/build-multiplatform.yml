@@ -61,11 +61,38 @@ jobs:
 
     - name: Build Windows Release
       run: flutter build windows --release --verbose
-      
+
+    - name: Debug - List Windows build directory structure
+      run: |
+        Write-Host "Listing build directory structure:"
+        if (Test-Path "build") {
+          Get-ChildItem -Path "build" -Recurse -Directory | Select-Object FullName
+          Write-Host "Looking for executable files:"
+          Get-ChildItem -Path "build" -Recurse -Filter "*.exe" | Select-Object FullName
+        } else {
+          Write-Host "Build directory does not exist"
+        }
+      shell: powershell
+
     - name: Create Windows release package
       run: |
-        cd build/windows/runner/Release
-        7z a -tzip ../../../../shiplus-windows-x64.zip *
+        # Find the exe file and its directory
+        $exeFile = Get-ChildItem -Path "build" -Recurse -Filter "shiplus.exe" | Select-Object -First 1
+        if ($exeFile) {
+          Write-Host "Found exe at: $($exeFile.FullName)"
+          $releaseDir = $exeFile.Directory.FullName
+          Write-Host "Release directory: $releaseDir"
+
+          # Create archive from the directory containing the exe
+          Set-Location $releaseDir
+          $archivePath = Join-Path $env:GITHUB_WORKSPACE "shiplus-windows-x64.zip"
+          7z a -tzip $archivePath *
+          Write-Host "Created archive: $archivePath"
+        } else {
+          Write-Host "ERROR: Could not find shiplus.exe"
+          exit 1
+        }
+      shell: powershell
         
     - name: Upload Windows artifacts
       uses: actions/upload-artifact@v4
