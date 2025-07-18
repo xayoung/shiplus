@@ -90,6 +90,7 @@ class DownloadService {
   ///
   /// [url] M3U8视频链接
   /// [fileName] 保存的文件名（不包含扩展名）
+  /// [audioLang] 音频语言选择，可选值: eng、deu、fra、spa、nld、por、fx、all
   /// [extraArgs] 额外的N_m3u8DL-RE命令行参数
   /// [onLog] 日志回调函数，用于实时接收下载日志
   ///
@@ -99,6 +100,7 @@ class DownloadService {
     String saveDir, // 修改参数顺序，添加saveDir参数
     String fileName, {
     String? taskId, // 新增任务ID参数
+    String audioLang = '', // 音频语言选择，空字符串表示使用配置中的默认值
     List<String>? extraArgs,
     Function(String)? onLog,
     Function(DownloadProgress)? onProgress, // 添加进度回调
@@ -126,6 +128,7 @@ class DownloadService {
         saveDir,
         cleanFileName,
         taskId: taskId, // 传递任务ID
+        audioLang: audioLang, // 传递音频语言选择
         extraArgs: extraArgs,
         onLog: onLog,
         onProgress: onProgress, // 传递进度回调

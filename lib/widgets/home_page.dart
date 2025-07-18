@@ -54,7 +54,6 @@ class _HomePageState extends State<HomePage> {
   // 首页数据相关状态
   List<HomeItem> _verticalItems = [];
   List<HomeItem> _horizontalItems = [];
-  String _verticalTitle = '精选内容';
   String _horizontalTitle = '最新赛事';
   bool _isLoading = true;
   String? _error;
@@ -145,7 +144,6 @@ class _HomePageState extends State<HomePage> {
         setState(() {
           _verticalItems = verticalItems;
           _horizontalItems = horizontalItems;
-          _verticalTitle = verticalTitle;
           _horizontalTitle = horizontalTitle;
           _isLoading = false;
         });
@@ -230,19 +228,11 @@ class _HomePageState extends State<HomePage> {
         children: [
           // 页面标题
           const Text(
-            'F1 TV',
+            '2025 Season',
             style: TextStyle(
               fontSize: 28,
               fontWeight: FontWeight.bold,
               color: Color(0xFF1E1E1E),
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            '最新的F1内容',
-            style: TextStyle(
-              fontSize: 16,
-              color: Colors.grey[600],
             ),
           ),
           const SizedBox(height: 32),
@@ -273,14 +263,6 @@ class _HomePageState extends State<HomePage> {
       children: [
         // 垂直海报列表 (vertical_simple_poster)
         if (_verticalItems.isNotEmpty) ...[
-          Text(
-            _verticalTitle,
-            style: const TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.bold,
-              color: Color(0xFF1E1E1E),
-            ),
-          ),
           const SizedBox(height: 16),
           SizedBox(
             height: 240, // 固定高度

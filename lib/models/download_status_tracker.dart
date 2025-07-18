@@ -3,15 +3,16 @@ import 'download_progress.dart';
 /// 下载状态跟踪器，用于管理 Vid、Aud 和 Sub 的分别进度
 class DownloadStatusTracker {
   DownloadProgress? _videoProgress;
-  DownloadProgress? _audioProgress;
+  final List<DownloadProgress> _audioProgresses = [];
   final List<DownloadProgress> _subtitleProgresses = [];
   DownloadProgress? _currentStatus;
 
   // 获取视频进度
   DownloadProgress? get videoProgress => _videoProgress;
 
-  // 获取音频进度
-  DownloadProgress? get audioProgress => _audioProgress;
+  // 获取音频进度列表
+  List<DownloadProgress> get audioProgresses =>
+      List.unmodifiable(_audioProgresses);
 
   // 获取字幕进度列表
   List<DownloadProgress> get subtitleProgresses =>
@@ -19,6 +20,10 @@ class DownloadStatusTracker {
 
   // 获取当前状态（合并、清理、完成等）
   DownloadProgress? get currentStatus => _currentStatus;
+
+  // 为了向后兼容，保留单个音频进度的 getter
+  DownloadProgress? get audioProgress =>
+      _audioProgresses.isNotEmpty ? _audioProgresses.first : null;
 
   // 获取整体进度百分比（基于切片累加）
   double get overallProgress {
@@ -40,9 +45,10 @@ class DownloadStatusTracker {
       totalSegments += _videoProgress!.totalSegments;
     }
 
-    if (_audioProgress != null) {
-      totalCompletedSegments += _audioProgress!.currentSegment;
-      totalSegments += _audioProgress!.totalSegments;
+    // 添加所有音频进度
+    for (final audioProgress in _audioProgresses) {
+      totalCompletedSegments += audioProgress.currentSegment;
+      totalSegments += audioProgress.totalSegments;
     }
 
     // 添加所有字幕进度
@@ -79,8 +85,14 @@ class DownloadStatusTracker {
       descriptions.add('视频: ${_videoProgress!.percentage.toStringAsFixed(1)}%');
     }
 
-    if (_audioProgress != null) {
-      descriptions.add('音频: ${_audioProgress!.percentage.toStringAsFixed(1)}%');
+    if (_audioProgresses.isNotEmpty) {
+      final audioCount = _audioProgresses.length;
+      final avgAudioProgress = _audioProgresses.isEmpty
+          ? 0.0
+          : _audioProgresses.map((a) => a.percentage).reduce((a, b) => a + b) /
+              _audioProgresses.length;
+      descriptions
+          .add('音频($audioCount): ${avgAudioProgress.toStringAsFixed(1)}%');
     }
 
     if (_subtitleProgresses.isNotEmpty) {
@@ -110,7 +122,15 @@ class DownloadStatusTracker {
         _currentStatus = null; // 清除状态，表示正在下载
         break;
       case 'audio':
-        _audioProgress = progress;
+        // 查找是否已存在相同质量的音频进度
+        final existingIndex = _audioProgresses.indexWhere(
+          (a) => a.quality == progress.quality,
+        );
+        if (existingIndex != -1) {
+          _audioProgresses[existingIndex] = progress;
+        } else {
+          _audioProgresses.add(progress);
+        }
         _currentStatus = null; // 清除状态，表示正在下载
         break;
       case 'subtitle':
@@ -136,7 +156,7 @@ class DownloadStatusTracker {
   // 重置状态
   void reset() {
     _videoProgress = null;
-    _audioProgress = null;
+    _audioProgresses.clear();
     _subtitleProgresses.clear();
     _currentStatus = null;
   }
@@ -161,16 +181,15 @@ class DownloadStatusTracker {
               'eta': _videoProgress!.eta,
             }
           : null,
-      'audio': _audioProgress != null
-          ? {
-              'quality': _audioProgress!.quality,
-              'progress':
-                  '${_audioProgress!.currentSegment}/${_audioProgress!.totalSegments}',
-              'percentage': _audioProgress!.percentage,
-              'size': _audioProgress!.downloadedSize,
-              'eta': _audioProgress!.eta,
-            }
-          : null,
+      'audios': _audioProgresses
+          .map((audio) => {
+                'quality': audio.quality,
+                'progress': '${audio.currentSegment}/${audio.totalSegments}',
+                'percentage': audio.percentage,
+                'size': audio.downloadedSize,
+                'eta': audio.eta,
+              })
+          .toList(),
       'subtitles': _subtitleProgresses
           .map((subtitle) => {
                 'quality': subtitle.quality,

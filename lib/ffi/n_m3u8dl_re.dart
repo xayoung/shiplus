@@ -4,7 +4,37 @@ import 'dart:io';
 import 'dart:typed_data';
 import 'package:flutter/services.dart';
 import 'package:path_provider/path_provider.dart';
-import '../models/download_progress.dart'; // 添加这个导入
+import '../services/n_m3u8dl_config_service.dart';
+import '../models/download_progress.dart';
+
+/// 音频语言选择枚举
+enum AudioLanguage {
+  english('eng', 'English'),
+  german('deu', 'Deutsch'),
+  french('fra', 'Français'),
+  spanish('spa', 'Español'),
+  dutch('nld', 'Nederlands'),
+  portuguese('por', 'Português'),
+  fx('fx', 'FX'),
+  all('all', 'All Languages');
+
+  const AudioLanguage(this.code, this.displayName);
+
+  final String code;
+  final String displayName;
+
+  /// 根据代码获取语言
+  static AudioLanguage fromCode(String code) {
+    return AudioLanguage.values.firstWhere(
+      (lang) => lang.code == code,
+      orElse: () => AudioLanguage.english,
+    );
+  }
+
+  /// 获取所有可用的语言代码
+  static List<String> get allCodes =>
+      AudioLanguage.values.map((e) => e.code).toList();
+}
 
 class N_m3u8DL_RE {
   // 存储正在运行的进程，用于取消下载
@@ -120,6 +150,7 @@ class N_m3u8DL_RE {
   /// [url] 视频的M3U8链接
   /// [saveDir] 保存目录路径
   /// [saveName] 保存的文件名
+  /// [audioLang] 音频语言选择，可选值: eng、deu、fra、spa、nld、por、fx、all，默认为 eng
   /// [extraArgs] 额外的命令行参数，如 ['-M', 'format=mp4:muxer=ffmpeg']
   /// [onLog] 日志回调函数，用于实时接收N_m3u8DL-RE的输出
   /// [onProgress] 进度回调函数，用于实时接收下载进度信息
@@ -133,6 +164,7 @@ class N_m3u8DL_RE {
     String saveDir,
     String saveName, {
     String? taskId, // 新增任务ID参数
+    String audioLang = 'eng', // 音频语言选择，默认为英语
     List<String>? extraArgs,
     Function(String)? onLog,
     Function(DownloadProgress)? onProgress, // 新增进度回调
@@ -189,18 +221,41 @@ class N_m3u8DL_RE {
       print('文件名: $saveName');
       print('可执行文件路径: $execPath');
 
+      // 获取配置参数
+      final muxerParameter = await N_m3u8dlConfigService.getMuxerParameter();
+      final videoSelectParameter =
+          await N_m3u8dlConfigService.getVideoSelectParameter();
+      final skipSub = await N_m3u8dlConfigService.getSkipSub();
+
+      // 如果没有指定音频语言，从配置中获取
+      final effectiveAudioLang = audioLang.isEmpty
+          ? await N_m3u8dlConfigService.getAudioLang()
+          : audioLang;
+
+      // 构建音频选择参数
+      var audioSelectParameter = 'lang=$effectiveAudioLang:for=best';
+      if (effectiveAudioLang == 'all') {
+        audioSelectParameter = 'all';
+      }
+
       // 构建完整的命令参数
       final fullArgs = [
         url, // 移除引号
+        '--use-system-proxy', 'False',
         '--save-dir', saveDir,
         '--save-name', saveName,
         '--tmp-dir', saveDir,
-        '-M', 'format=mp4:muxer=ffmpeg',
+        '-M', muxerParameter,
         '--ffmpeg-binary-path', ffmpegPath, // 添加ffmpeg可执行文件路径
-        '-sv', 'best',
-        '-sa', 'best',
-        '-ss', 'all'
+        '-sv', videoSelectParameter,
+        '-sa', audioSelectParameter,
       ];
+
+      // 只有当不跳过字幕时才添加字幕选择参数
+      if (!skipSub) {
+        fullArgs.add('-ss');
+        fullArgs.add('all');
+      }
 
       // 添加额外参数
       if (extraArgs != null && extraArgs.isNotEmpty) {

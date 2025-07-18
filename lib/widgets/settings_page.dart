@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
 import '../services/download_service.dart';
+import '../services/n_m3u8dl_config_service.dart';
 
 class SettingsPage extends StatefulWidget {
   const SettingsPage({super.key});
@@ -13,10 +14,18 @@ class _SettingsPageState extends State<SettingsPage> {
   final _pathController = TextEditingController();
   String _currentPath = '';
 
+  // N_m3u8DL-RE 配置
+  String _selectedFormat = 'mp4';
+  bool _skipSub = true;
+  String _selectedResolution = 'best';
+  String _selectedRange = 'SDR';
+  String _selectedAudioLang = 'eng';
+
   @override
   void initState() {
     super.initState();
     _loadCurrentPath();
+    _loadDownloadConfig();
   }
 
   Future<void> _loadCurrentPath() async {
@@ -27,6 +36,60 @@ class _SettingsPageState extends State<SettingsPage> {
       });
     } catch (e) {
       _showErrorSnackBar('获取下载路径失败: $e');
+    }
+  }
+
+  Future<void> _loadDownloadConfig() async {
+    try {
+      final format = await N_m3u8dlConfigService.getFormat();
+      final skipSub = await N_m3u8dlConfigService.getSkipSub();
+      final resolution = await N_m3u8dlConfigService.getResolution();
+      final range = await N_m3u8dlConfigService.getRange();
+      final audioLang = await N_m3u8dlConfigService.getAudioLang();
+      setState(() {
+        _selectedFormat = format;
+        _skipSub = skipSub;
+        _selectedResolution = resolution;
+        _selectedRange = range;
+        _selectedAudioLang = audioLang;
+      });
+    } catch (e) {
+      _showErrorSnackBar('获取下载配置失败: $e');
+    }
+  }
+
+  Future<void> _saveDownloadConfig() async {
+    try {
+      await N_m3u8dlConfigService.setFormat(_selectedFormat);
+      await N_m3u8dlConfigService.setSkipSub(_skipSub);
+      await N_m3u8dlConfigService.setResolution(_selectedResolution);
+      await N_m3u8dlConfigService.setRange(_selectedRange);
+      await N_m3u8dlConfigService.setAudioLang(_selectedAudioLang);
+      _showSuccessSnackBar('下载配置已保存');
+    } catch (e) {
+      print('保存配置错误详情: $e');
+      _showErrorSnackBar('保存下载配置失败: ${e.toString()}');
+    }
+  }
+
+  Future<void> _resetDownloadConfig() async {
+    try {
+      await N_m3u8dlConfigService.resetToDefaults();
+      await _loadDownloadConfig();
+      _showSuccessSnackBar('下载配置已重置为默认值');
+    } catch (e) {
+      print('重置配置错误详情: $e');
+
+      // 即使重置失败，也尝试更新UI到默认值
+      setState(() {
+        _selectedFormat = N_m3u8dlConfigService.defaultFormat;
+        _skipSub = N_m3u8dlConfigService.defaultSkipSub;
+        _selectedResolution = N_m3u8dlConfigService.defaultResolution;
+        _selectedRange = N_m3u8dlConfigService.defaultRange;
+        _selectedAudioLang = N_m3u8dlConfigService.defaultAudioLang;
+      });
+
+      _showErrorSnackBar('重置下载配置失败: ${e.toString()}');
     }
   }
 
@@ -237,6 +300,278 @@ class _SettingsPageState extends State<SettingsPage> {
                             onPressed: _clearCustomPath,
                             icon: const Icon(Icons.refresh, size: 18),
                             label: const Text('恢复默认'),
+                            style: OutlinedButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+
+            const SizedBox(height: 24),
+
+            // N_m3u8DL-RE 下载配置卡片
+            Card(
+              elevation: 2,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.all(24.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(
+                          Icons.settings,
+                          color: Theme.of(context).primaryColor,
+                          size: 24,
+                        ),
+                        const SizedBox(width: 12),
+                        const Text(
+                          '下载配置',
+                          style: TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                      '配置 N_m3u8DL-RE 下载参数',
+                      style: TextStyle(
+                        color: Colors.grey[600],
+                        fontSize: 14,
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+
+                    // 输出格式选择
+                    Text(
+                      '输出格式',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.grey[800],
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      decoration: BoxDecoration(
+                        border: Border.all(color: Colors.grey[300]!),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: DropdownButtonHideUnderline(
+                        child: DropdownButton<String>(
+                          value: _selectedFormat,
+                          items: N_m3u8dlConfigService.getSupportedFormats()
+                              .map((format) => DropdownMenuItem(
+                                    value: format,
+                                    child: Text(format.toUpperCase()),
+                                  ))
+                              .toList(),
+                          onChanged: (value) {
+                            if (value != null) {
+                              setState(() {
+                                _selectedFormat = value;
+                              });
+                            }
+                          },
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+
+                    // 跳过字幕开关
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                '跳过字幕',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w600,
+                                  color: Colors.grey[800],
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                '启用后将不下载字幕文件',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: Colors.grey[600],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Switch(
+                          value: _skipSub,
+                          onChanged: (value) {
+                            setState(() {
+                              _skipSub = value;
+                            });
+                          },
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 20),
+
+                    // 视频分辨率选择
+                    Text(
+                      '视频分辨率',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.grey[800],
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      decoration: BoxDecoration(
+                        border: Border.all(color: Colors.grey[300]!),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: DropdownButtonHideUnderline(
+                        child: DropdownButton<String>(
+                          value: _selectedResolution,
+                          items: N_m3u8dlConfigService
+                                  .getSupportedResolutionsTitle()
+                              .map((resolution) => DropdownMenuItem(
+                                    value: resolution['value'],
+                                    child: Text(resolution['name']!),
+                                  ))
+                              .toList(),
+                          onChanged: (value) {
+                            if (value != null) {
+                              setState(() {
+                                _selectedResolution = value;
+                              });
+                            }
+                          },
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+
+                    // 动态范围选择
+                    Text(
+                      '动态范围',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.grey[800],
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      decoration: BoxDecoration(
+                        border: Border.all(color: Colors.grey[300]!),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: DropdownButtonHideUnderline(
+                        child: DropdownButton<String>(
+                          value: _selectedRange,
+                          items: N_m3u8dlConfigService.getSupportedRanges()
+                              .map((range) => DropdownMenuItem(
+                                    value: range['value'],
+                                    child: Text(range['name']!),
+                                  ))
+                              .toList(),
+                          onChanged: (value) {
+                            if (value != null) {
+                              setState(() {
+                                _selectedRange = value;
+                              });
+                            }
+                          },
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+
+                    // 音频语言选择
+                    Text(
+                      '音频语言',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.grey[800],
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      decoration: BoxDecoration(
+                        border: Border.all(color: Colors.grey[300]!),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: DropdownButtonHideUnderline(
+                        child: DropdownButton<String>(
+                          value: _selectedAudioLang,
+                          items:
+                              N_m3u8dlConfigService.getSupportedAudioLanguages()
+                                  .map((audioLang) => DropdownMenuItem(
+                                        value: audioLang['value'],
+                                        child: Text(audioLang['name']!),
+                                      ))
+                                  .toList(),
+                          onChanged: (value) {
+                            if (value != null) {
+                              setState(() {
+                                _selectedAudioLang = value;
+                              });
+                            }
+                          },
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+
+                    // 保存和重置按钮
+                    Row(
+                      children: [
+                        Expanded(
+                          child: ElevatedButton.icon(
+                            onPressed: _saveDownloadConfig,
+                            icon: const Icon(Icons.save, size: 18),
+                            label: const Text('保存配置'),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.green,
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: OutlinedButton.icon(
+                            onPressed: _resetDownloadConfig,
+                            icon: const Icon(Icons.refresh, size: 18),
+                            label: const Text('重置默认'),
                             style: OutlinedButton.styleFrom(
                               padding: const EdgeInsets.symmetric(vertical: 12),
                               shape: RoundedRectangleBorder(

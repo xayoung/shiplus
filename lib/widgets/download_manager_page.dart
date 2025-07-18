@@ -412,7 +412,7 @@ class _DownloadManagerPageState extends State<DownloadManagerPage> {
 
         // Vid、Aud 和 Sub 分别进度
         if (tracker.videoProgress != null ||
-            tracker.audioProgress != null ||
+            tracker.audioProgresses.isNotEmpty ||
             tracker.subtitleProgresses.isNotEmpty) ...[
           const SizedBox(height: 8),
 
@@ -464,49 +464,54 @@ class _DownloadManagerPageState extends State<DownloadManagerPage> {
           ],
 
           // 音频进度
-          if (tracker.audioProgress != null) ...[
-            Row(
-              children: [
-                Container(
-                  width: 4,
-                  height: 4,
-                  decoration: const BoxDecoration(
-                    color: Colors.green,
-                    shape: BoxShape.circle,
-                  ),
-                ),
-                const SizedBox(width: 6),
-                Text(
-                  'Aud (${tracker.audioProgress!.quality})',
-                  style: const TextStyle(
-                      fontSize: 11, fontWeight: FontWeight.w500),
-                ),
-                const Spacer(),
-                Text(
-                  '${tracker.audioProgress!.currentSegment}/${tracker.audioProgress!.totalSegments} - ${tracker.audioProgress!.percentage.toStringAsFixed(1)}%',
-                  style: const TextStyle(fontSize: 11),
-                ),
-              ],
-            ),
-            const SizedBox(height: 2),
-            LinearProgressIndicator(
-              value: tracker.audioProgress!.percentage / 100,
-              backgroundColor: Colors.green[100],
-              valueColor: const AlwaysStoppedAnimation<Color>(Colors.green),
-            ),
-            if (tracker.audioProgress!.downloadedSize.isNotEmpty &&
-                tracker.audioProgress!.downloadedSize != '-') ...[
-              const SizedBox(height: 2),
+          if (tracker.audioProgresses.isNotEmpty) ...[
+            for (int i = 0; i < tracker.audioProgresses.length; i++) ...[
               Row(
                 children: [
-                  const SizedBox(width: 10),
+                  Container(
+                    width: 4,
+                    height: 4,
+                    decoration: const BoxDecoration(
+                      color: Colors.green,
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                  const SizedBox(width: 6),
                   Text(
-                    '${tracker.audioProgress!.downloadedSize} | ETA: ${tracker.audioProgress!.eta}',
-                    style: TextStyle(fontSize: 10, color: Colors.grey[600]),
+                    'Aud (${tracker.audioProgresses[i].quality})',
+                    style: const TextStyle(
+                        fontSize: 11, fontWeight: FontWeight.w500),
+                  ),
+                  const Spacer(),
+                  Text(
+                    '${tracker.audioProgresses[i].currentSegment}/${tracker.audioProgresses[i].totalSegments} - ${tracker.audioProgresses[i].percentage.toStringAsFixed(1)}%',
+                    style: const TextStyle(fontSize: 11),
                   ),
                 ],
               ),
+              const SizedBox(height: 2),
+              LinearProgressIndicator(
+                value: tracker.audioProgresses[i].percentage / 100,
+                backgroundColor: Colors.green[100],
+                valueColor: const AlwaysStoppedAnimation<Color>(Colors.green),
+              ),
+              if (tracker.audioProgresses[i].downloadedSize.isNotEmpty &&
+                  tracker.audioProgresses[i].downloadedSize != '-') ...[
+                const SizedBox(height: 2),
+                Row(
+                  children: [
+                    const SizedBox(width: 10),
+                    Text(
+                      '${tracker.audioProgresses[i].downloadedSize} | ETA: ${tracker.audioProgresses[i].eta}',
+                      style: TextStyle(fontSize: 10, color: Colors.grey[600]),
+                    ),
+                  ],
+                ),
+              ],
+              if (i < tracker.audioProgresses.length - 1)
+                const SizedBox(height: 6),
             ],
+            const SizedBox(height: 6),
           ],
 
           // 字幕进度

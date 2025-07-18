@@ -15,6 +15,10 @@ class MyApp extends StatelessWidget {
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),
         useMaterial3: true,
+        fontFamily: 'Titillium Web',
+        textTheme: const TextTheme().apply(
+          fontFamily: 'Titillium Web',
+        ),
       ),
       home: const MainLayout(),
     );

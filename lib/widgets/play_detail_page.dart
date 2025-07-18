@@ -93,12 +93,14 @@ class _PlayDetailPageState extends State<PlayDetailPage> {
   Future<void> _fetchStreamData(
       String playbackUrl, String token, String title) async {
     try {
-      // final url = 'https://f1tv.formula1.com/2.0/R/ENG/BIG_SCREEN_HLS/ALL/$playbackUrl&player=player_bm';
-      // const deviceInfo = 'device=tvos;screen=bigscreen;os=tvos;model=appletv14.1;osVersion=16.4;appVersion=2.31.0;playerVersion=3.65.0';
       final url =
-          'https://f1tv.formula1.com/2.0/R/ENG/WEB_HLS/ALL/$playbackUrl&player=player_bm';
-      final deviceInfo =
-          'device=web;screen=browser;os=mac os;browser=chrome;browserVersion=137.0.0.0;model=Macintosh;osVersion=14.6.1;appVersion=release-R43.0.1;playerVersion=8.212.0';
+          'https://f1tv.formula1.com/2.0/R/ENG/BIG_SCREEN_HLS/ALL/$playbackUrl&player=player_bm';
+      const deviceInfo =
+          'device=tvos;screen=bigscreen;os=tvos;model=appletv14.1;osVersion=16.4;appVersion=2.31.0;playerVersion=3.65.0';
+      // final url =
+      //     'https://f1tv.formula1.com/2.0/R/ENG/WEB_HLS/ALL/$playbackUrl&player=player_bm';
+      // final deviceInfo =
+      //     'device=web;screen=browser;os=mac os;browser=chrome;browserVersion=137.0.0.0;model=Macintosh;osVersion=14.6.1;appVersion=release-R43.0.1;playerVersion=8.212.0';
 
       print('请求流媒体数据: $url');
       final response = await dio.get(

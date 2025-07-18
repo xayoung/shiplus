@@ -138,6 +138,54 @@ dart format .
 **原因**: 应用程序需要从 assets 提取可执行文件
 **解决方案**: 等待几秒钟，后续运行会更快
 
+#### 配置不生效
+**原因**: 配置可能未正确保存
+**解决方案**:
+1. 重新打开 Settings 页面检查配置
+2. 点击 "重置默认" 后重新配置
+3. 重启应用程序
+
+## ⚙️ 配置选项
+
+### N_m3u8DL-RE 下载配置
+在 Settings 页面可以配置下载参数：
+
+#### 输出格式
+- **MP4** (默认): 兼容性最好，适合大多数播放器
+- **MKV**: 支持更多编解码器和字幕格式
+
+#### 视频质量
+- **分辨率选择**: 480p, 720p, 1080p, 1440p, 4K 等
+- **动态范围**: SDR (标准) / HLG (高动态范围)
+
+#### 字幕处理
+- **跳过字幕** (默认开启): 不下载字幕文件，减少下载时间
+- **包含字幕**: 下载所有可用的字幕文件
+
+### 配置方法
+1. 打开 Settings 页面
+2. 在 "下载配置" 部分调整设置
+3. 点击 "保存配置" 应用更改
+4. 新的下载任务将使用新配置
+
+## 🎨 设计特性
+
+### 字体
+- **全局字体**: Titillium Web Sans-serif
+- **字重支持**: Light (300), Regular (400), SemiBold (600), Bold (700)
+- **特点**: 现代、简洁、易读的无衬线字体
+
+### 字体安装
+```bash
+# 自动下载字体文件
+./scripts/download-fonts.sh      # Unix/macOS/Linux
+scripts\download-fonts.bat       # Windows
+
+# 应用字体配置
+flutter pub get
+flutter clean
+```
+
 ## 📚 项目结构
 
 ```
@@ -151,6 +199,16 @@ lib/
 ├── utils/                 # 工具类
 │   └── dio_helper.dart
 └── ...
+
+assets/
+├── fonts/                 # Titillium Web 字体文件
+│   ├── TitilliumWeb-Light.ttf
+│   ├── TitilliumWeb-Regular.ttf
+│   ├── TitilliumWeb-SemiBold.ttf
+│   └── TitilliumWeb-Bold.ttf
+└── bin/                   # 可执行文件
+    ├── N_m3u8DL-RE(.exe)
+    └── ffmpeg(.exe)
 
 .github/
 ├── workflows/             # GitHub Actions 工作流
