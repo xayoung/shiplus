@@ -76,12 +76,69 @@ jobs:
 
     - name: Install NSIS
       run: |
-        # Download and install NSIS
-        Invoke-WebRequest -Uri "https://downloads.sourceforge.net/project/nsis/NSIS%203/3.09/nsis-3.09-setup.exe" -OutFile "nsis-setup.exe"
-        Start-Process -FilePath "nsis-setup.exe" -ArgumentList "/S" -Wait
-        # Add NSIS to PATH
-        $env:PATH += ";C:\Program Files (x86)\NSIS"
-        echo "C:\Program Files (x86)\NSIS" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+        try {
+          # Method 1: Try Chocolatey first (most reliable)
+          Write-Host "Installing NSIS via Chocolatey..."
+          choco install nsis -y
+
+          # Verify installation
+          $nsisPath = "C:\Program Files (x86)\NSIS"
+          if (Test-Path $nsisPath) {
+            Write-Host "NSIS installed successfully via Chocolatey at: $nsisPath"
+            # Add NSIS to PATH
+            $env:PATH += ";$nsisPath"
+            echo $nsisPath | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+            exit 0
+          }
+        } catch {
+          Write-Host "Chocolatey installation failed, trying alternative method..."
+        }
+
+        try {
+          # Method 2: Direct download with retry and verification
+          Write-Host "Downloading NSIS directly..."
+          $url = "https://downloads.sourceforge.net/project/nsis/NSIS%203/3.09/nsis-3.09-setup.exe"
+          $output = "nsis-setup.exe"
+
+          # Download with retry
+          for ($i = 1; $i -le 3; $i++) {
+            try {
+              Write-Host "Download attempt $i..."
+              Invoke-WebRequest -Uri $url -OutFile $output -UseBasicParsing
+
+              # Verify file size (should be around 1.5MB)
+              $fileSize = (Get-Item $output).Length
+              if ($fileSize -gt 1000000) {
+                Write-Host "Download successful, file size: $fileSize bytes"
+                break
+              } else {
+                Write-Host "Downloaded file too small, retrying..."
+                Remove-Item $output -ErrorAction SilentlyContinue
+              }
+            } catch {
+              Write-Host "Download attempt $i failed: $($_.Exception.Message)"
+              if ($i -eq 3) { throw }
+            }
+          }
+
+          # Install NSIS
+          Write-Host "Installing NSIS..."
+          Start-Process -FilePath $output -ArgumentList "/S" -Wait -NoNewWindow
+
+          # Verify installation
+          $nsisPath = "C:\Program Files (x86)\NSIS"
+          if (Test-Path $nsisPath) {
+            Write-Host "NSIS installed successfully at: $nsisPath"
+            # Add NSIS to PATH
+            $env:PATH += ";$nsisPath"
+            echo $nsisPath | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          } else {
+            throw "NSIS installation verification failed"
+          }
+        } catch {
+          Write-Host "ERROR: All NSIS installation methods failed: $($_.Exception.Message)"
+          exit 1
+        }
       shell: powershell
 
     - name: Create NSIS installer script
@@ -214,9 +271,35 @@ jobs:
 
     - name: Build Windows installer
       run: |
+        # Verify NSIS is available
+        $nsisExe = Get-Command makensis -ErrorAction SilentlyContinue
+        if (-not $nsisExe) {
+          Write-Host "ERROR: makensis not found in PATH"
+          Write-Host "Current PATH: $env:PATH"
+          exit 1
+        }
+
+        Write-Host "Using NSIS at: $($nsisExe.Source)"
+
+        # Verify build directory exists
+        if (-not (Test-Path "build\windows\x64\runner\Release")) {
+          Write-Host "ERROR: Build directory not found"
+          Get-ChildItem -Path "build" -Recurse -Directory | Select-Object FullName
+          exit 1
+        }
+
         # Build the installer using NSIS
+        Write-Host "Building Windows installer..."
         makensis installer.nsi
-        Write-Host "Windows installer created"
+
+        # Verify installer was created
+        if (Test-Path "shiplus-windows-x64-installer.exe") {
+          $installerSize = (Get-Item "shiplus-windows-x64-installer.exe").Length
+          Write-Host "Windows installer created successfully, size: $installerSize bytes"
+        } else {
+          Write-Host "ERROR: Installer was not created"
+          exit 1
+        }
       shell: powershell
 
     - name: Create Windows release package
