@@ -74,6 +74,151 @@ jobs:
         }
       shell: powershell
 
+    - name: Install NSIS
+      run: |
+        # Download and install NSIS
+        Invoke-WebRequest -Uri "https://downloads.sourceforge.net/project/nsis/NSIS%203/3.09/nsis-3.09-setup.exe" -OutFile "nsis-setup.exe"
+        Start-Process -FilePath "nsis-setup.exe" -ArgumentList "/S" -Wait
+        # Add NSIS to PATH
+        $env:PATH += ";C:\Program Files (x86)\NSIS"
+        echo "C:\Program Files (x86)\NSIS" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+      shell: powershell
+
+    - name: Create NSIS installer script
+      run: |
+        $nsisScript = @"
+        !define APP_NAME "Shiplus"
+        !define APP_VERSION "1.0.0"
+        !define APP_PUBLISHER "Shiplus Team"
+        !define APP_URL "https://github.com/your-repo/shiplus"
+        !define APP_DESCRIPTION "Shiplus - F1 Video Downloader"
+
+        # Installer settings
+        Name "`${APP_NAME}"
+        OutFile "shiplus-windows-x64-installer.exe"
+        InstallDir "`$PROGRAMFILES64\`${APP_NAME}"
+        InstallDirRegKey HKLM "Software\`${APP_NAME}" "InstallDir"
+        RequestExecutionLevel admin
+
+        # Modern UI
+        !include "MUI2.nsh"
+        !define MUI_ABORTWARNING
+        !define MUI_ICON "`${NSISDIR}\Contrib\Graphics\Icons\modern-install.ico"
+        !define MUI_UNICON "`${NSISDIR}\Contrib\Graphics\Icons\modern-uninstall.ico"
+
+        # Pages
+        !insertmacro MUI_PAGE_WELCOME
+        !insertmacro MUI_PAGE_LICENSE "LICENSE"
+        !insertmacro MUI_PAGE_DIRECTORY
+        !insertmacro MUI_PAGE_INSTFILES
+        !insertmacro MUI_PAGE_FINISH
+
+        !insertmacro MUI_UNPAGE_WELCOME
+        !insertmacro MUI_UNPAGE_CONFIRM
+        !insertmacro MUI_UNPAGE_INSTFILES
+        !insertmacro MUI_UNPAGE_FINISH
+
+        # Languages
+        !insertmacro MUI_LANGUAGE "English"
+        !insertmacro MUI_LANGUAGE "SimpChinese"
+
+        # Version info
+        VIProductVersion "1.0.0.0"
+        VIAddVersionKey "ProductName" "`${APP_NAME}"
+        VIAddVersionKey "ProductVersion" "`${APP_VERSION}"
+        VIAddVersionKey "CompanyName" "`${APP_PUBLISHER}"
+        VIAddVersionKey "FileDescription" "`${APP_DESCRIPTION}"
+        VIAddVersionKey "FileVersion" "`${APP_VERSION}"
+
+        # Installer sections
+        Section "MainSection" SEC01
+          SetOutPath "`$INSTDIR"
+          SetOverwrite ifnewer
+
+          # Copy all files from build directory
+          File /r "build\windows\x64\runner\Release\*"
+
+          # Create uninstaller
+          WriteUninstaller "`$INSTDIR\uninstall.exe"
+
+          # Registry entries
+          WriteRegStr HKLM "Software\`${APP_NAME}" "InstallDir" "`$INSTDIR"
+          WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\`${APP_NAME}" "DisplayName" "`${APP_NAME}"
+          WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\`${APP_NAME}" "UninstallString" "`$INSTDIR\uninstall.exe"
+          WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\`${APP_NAME}" "DisplayIcon" "`$INSTDIR\shiplus.exe"
+          WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\`${APP_NAME}" "Publisher" "`${APP_PUBLISHER}"
+          WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\`${APP_NAME}" "DisplayVersion" "`${APP_VERSION}"
+          WriteRegDWORD HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\`${APP_NAME}" "NoModify" 1
+          WriteRegDWORD HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\`${APP_NAME}" "NoRepair" 1
+        SectionEnd
+
+        # Desktop shortcut
+        Section "Desktop Shortcut" SEC02
+          CreateShortCut "`$DESKTOP\`${APP_NAME}.lnk" "`$INSTDIR\shiplus.exe"
+        SectionEnd
+
+        # Start menu shortcut
+        Section "Start Menu Shortcut" SEC03
+          CreateDirectory "`$SMPROGRAMS\`${APP_NAME}"
+          CreateShortCut "`$SMPROGRAMS\`${APP_NAME}\`${APP_NAME}.lnk" "`$INSTDIR\shiplus.exe"
+          CreateShortCut "`$SMPROGRAMS\`${APP_NAME}\Uninstall.lnk" "`$INSTDIR\uninstall.exe"
+        SectionEnd
+
+        # Uninstaller
+        Section "Uninstall"
+          Delete "`$INSTDIR\uninstall.exe"
+          RMDir /r "`$INSTDIR"
+
+          DeleteRegKey HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\`${APP_NAME}"
+          DeleteRegKey HKLM "Software\`${APP_NAME}"
+
+          Delete "`$DESKTOP\`${APP_NAME}.lnk"
+          Delete "`$SMPROGRAMS\`${APP_NAME}\*.*"
+          RMDir "`$SMPROGRAMS\`${APP_NAME}"
+        SectionEnd
+        "@
+
+        $nsisScript | Out-File -FilePath "installer.nsi" -Encoding UTF8
+        Write-Host "NSIS script created"
+      shell: powershell
+
+    - name: Create LICENSE file for installer
+      run: |
+        $license = @"
+        MIT License
+
+        Copyright (c) 2024 Shiplus Team
+
+        Permission is hereby granted, free of charge, to any person obtaining a copy
+        of this software and associated documentation files (the "Software"), to deal
+        in the Software without restriction, including without limitation the rights
+        to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+        copies of the Software, and to permit persons to whom the Software is
+        furnished to do so, subject to the following conditions:
+
+        The above copyright notice and this permission notice shall be included in all
+        copies or substantial portions of the Software.
+
+        THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+        IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+        FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+        AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+        LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+        OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+        SOFTWARE.
+        "@
+
+        $license | Out-File -FilePath "LICENSE" -Encoding UTF8
+        Write-Host "LICENSE file created"
+      shell: powershell
+
+    - name: Build Windows installer
+      run: |
+        # Build the installer using NSIS
+        makensis installer.nsi
+        Write-Host "Windows installer created"
+      shell: powershell
+
     - name: Create Windows release package
       run: |
         # Find the exe file and its directory
@@ -98,7 +243,9 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: shiplus-windows-x64
-        path: shiplus-windows-x64.zip
+        path: |
+          shiplus-windows-x64.zip
+          shiplus-windows-x64-installer.exe
         retention-days: 30
 
   # macOS 构建
@@ -217,31 +364,47 @@ jobs:
       with:
         files: |
           shiplus-windows-x64/shiplus-windows-x64.zip
+          shiplus-windows-x64/shiplus-windows-x64-installer.exe
           shiplus-macos-arm64/shiplus-macos-arm64.zip
         name: Release ${{ github.ref_name }}
         body: |
           ## 🚀 Shiplus ${{ github.ref_name }}
-          
+
           ### 📦 下载说明
-          
+
           #### Windows (x64)
+          **推荐安装方式：**
+          - 下载: `shiplus-windows-x64-installer.exe`
+          - 双击运行安装程序，按提示完成安装
+          - 自动创建桌面快捷方式和开始菜单项目
+
+          **便携版：**
           - 下载: `shiplus-windows-x64.zip`
           - 解压后运行 `shiplus.exe`
+          - 无需安装，可放置在任意文件夹
+
           - 系统要求: Windows 10+ (x64)
 
           #### macOS (Apple Silicon)
           - 下载: `shiplus-macos-arm64.zip`
           - 解压后运行 `shiplus.app`
           - 系统要求: macOS 11.0+ (M1/M2/M3 芯片)
-          
+
           ### 🔧 安装步骤
-          1. 根据你的操作系统下载对应的压缩包
-          2. 解压到任意文件夹
-          3. 运行主程序文件
-          
+
+          #### Windows 用户
+          1. **安装版（推荐）**: 下载 `.exe` 安装程序，双击运行并按提示安装
+          2. **便携版**: 下载 `.zip` 压缩包，解压到任意文件夹，运行 `shiplus.exe`
+
+          #### macOS 用户
+          1. 下载 `.zip` 压缩包
+          2. 解压到应用程序文件夹
+          3. 运行 `shiplus.app`
+
           ### ⚠️ 注意事项
-          - 首次运行可能需要允许应用程序通过防火墙
+          - Windows 用户首次运行可能需要允许应用程序通过防火墙
           - macOS 用户可能需要在"系统偏好设置 > 安全性与隐私"中允许应用运行
+          - 安装版会自动创建卸载程序，可通过控制面板卸载
         draft: false
         prerelease: false
       env:
