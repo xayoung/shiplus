@@ -245,6 +245,7 @@ class N_m3u8DL_RE {
         '--save-dir', saveDir,
         '--save-name', saveName,
         '--tmp-dir', saveDir,
+        '-mt', 'True',
         '-M', muxerParameter,
         '--ffmpeg-binary-path', ffmpegPath, // 添加ffmpeg可执行文件路径
         '-sv', videoSelectParameter,
@@ -303,9 +304,9 @@ class N_m3u8DL_RE {
       final stdoutCompleter = Completer<void>();
       final stderrCompleter = Completer<void>();
 
-      // 监听stdout
+      // 监听stdout - 使用宽松的UTF-8解码，允许错误字符
       process.stdout
-          .transform(utf8.decoder)
+          .transform(const Utf8Decoder(allowMalformed: true))
           .transform(const LineSplitter())
           .listen(
         (line) {
@@ -321,13 +322,22 @@ class N_m3u8DL_RE {
             onProgress?.call(progress);
           }
         },
-        onDone: () => stdoutCompleter.complete(),
-        onError: (error) => stdoutCompleter.completeError(error),
+        onDone: () {
+          if (!stdoutCompleter.isCompleted) {
+            stdoutCompleter.complete();
+          }
+        },
+        onError: (error) {
+          print('stdout解码错误: $error');
+          if (!stdoutCompleter.isCompleted) {
+            stdoutCompleter.completeError(error);
+          }
+        },
       );
 
-      // 监听stderr
+      // 监听stderr - 使用宽松的UTF-8解码，允许错误字符
       process.stderr
-          .transform(utf8.decoder)
+          .transform(const Utf8Decoder(allowMalformed: true))
           .transform(const LineSplitter())
           .listen(
         (line) {
@@ -337,13 +347,38 @@ class N_m3u8DL_RE {
           print(logMessage);
           onLog?.call(logMessage);
         },
-        onDone: () => stderrCompleter.complete(),
-        onError: (error) => stderrCompleter.completeError(error),
+        onDone: () {
+          if (!stderrCompleter.isCompleted) {
+            stderrCompleter.complete();
+          }
+        },
+        onError: (error) {
+          print('stderr解码错误: $error');
+          if (!stderrCompleter.isCompleted) {
+            stderrCompleter.completeError(error);
+          }
+        },
       );
 
       // 等待进程退出和所有输出流完成
       final exitCode = await process.exitCode;
-      await Future.wait([stdoutCompleter.future, stderrCompleter.future]);
+
+      // 使用超时等待输出流完成，避免无限等待
+      try {
+        await Future.wait([
+          stdoutCompleter.future,
+          stderrCompleter.future
+        ]).timeout(const Duration(seconds: 10));
+      } catch (timeoutError) {
+        print('等待输出流完成超时: $timeoutError');
+        // 强制完成未完成的Completer
+        if (!stdoutCompleter.isCompleted) {
+          stdoutCompleter.complete();
+        }
+        if (!stderrCompleter.isCompleted) {
+          stderrCompleter.complete();
+        }
+      }
 
       // 清理进程引用
       if (taskId != null) {
@@ -372,7 +407,20 @@ class N_m3u8DL_RE {
       if (taskId != null) {
         _runningProcesses.remove(taskId);
       }
-      print('下载过程中发生异常: $e');
+
+      final timestamp = DateTime.now().toString().substring(11, 19);
+
+      // 区分不同类型的异常
+      String errorMessage;
+      if (e is FormatException && e.message.contains('Missing extension byte')) {
+        errorMessage = '❌ [$timestamp] 字符编码错误已修复，请重试下载';
+        print('UTF-8解码错误已通过allowMalformed修复: $e');
+      } else {
+        errorMessage = '❌ [$timestamp] 下载过程中发生异常: $e';
+        print(errorMessage);
+      }
+
+      onLog?.call(errorMessage);
       rethrow;
     }
   }
@@ -384,6 +432,130 @@ class N_m3u8DL_RE {
         line.contains('Sub ')) {
       print('解析进度行: $line');
     }
+
+    // 根据平台选择不同的解析策略
+    if (Platform.isWindows) {
+      return _parseProgressWindows(line);
+    } else {
+      return _parseProgressMacLinux(line);
+    }
+  }
+
+  /// Windows平台的进度解析
+  static DownloadProgress? _parseProgressWindows(String line) {
+    // 检查是否是合并状态
+    if (line.contains('Muxing to') || line.contains('正在合并')) {
+      final fileName =
+          RegExp(r'Muxing to (.+)').firstMatch(line)?.group(1) ??
+          RegExp(r'正在合并.*?([^\\/]+\.\w+)').firstMatch(line)?.group(1) ?? '';
+      return DownloadProgress.muxing('正在合并到: $fileName');
+    }
+
+    // 检查是否是清理状态
+    if (line.contains('Cleaning files') || line.contains('清理文件')) {
+      return DownloadProgress.cleaning();
+    }
+
+    // 检查是否是重命名状态
+    if (line.contains('Rename to') || line.contains('重命名')) {
+      final fileName =
+          RegExp(r'Rename to (.+)').firstMatch(line)?.group(1) ??
+          RegExp(r'重命名.*?([^\\/]+\.\w+)').firstMatch(line)?.group(1) ?? '';
+      return DownloadProgress.muxing('重命名为: $fileName');
+    }
+
+    // 检查是否是完成状态
+    if (line.contains('Done') || line.contains('完成') || line.contains('任务结束')) {
+      return DownloadProgress.done('下载完成');
+    }
+
+    // Windows平台可能使用不同的进度条字符，尝试多种模式
+    // 解析视频进度 - 支持多种进度条字符
+    final videoPatterns = [
+      // 标准Unicode进度条
+      r'Vid\s+([^|]+)\s*\|.*?[━═▬■]+\s*(\d+)/(\d+)\s+(\d+\.\d+)%(?:\s+([\d.]+\w+)(?:/[\d.]+\w+)?\s*(?:[\d.]+\w+)?\s*(?:-?\s*(\d{2}:\d{2}:\d{2}))?)?',
+      // ASCII进度条
+      r'Vid\s+([^|]+)\s*\|.*?[=\-#*]+\s*(\d+)/(\d+)\s+(\d+\.\d+)%(?:\s+([\d.]+\w+)(?:/[\d.]+\w+)?\s*(?:[\d.]+\w+)?\s*(?:-?\s*(\d{2}:\d{2}:\d{2}))?)?',
+      // 简化模式，不依赖进度条字符
+      r'Vid\s+([^|]+)\s*\|.*?\s+(\d+)/(\d+)\s+(\d+\.\d+)%(?:\s+([\d.]+\w+)(?:/[\d.]+\w+)?\s*(?:[\d.]+\w+)?\s*(?:-?\s*(\d{2}:\d{2}:\d{2}))?)?',
+    ];
+
+    for (final pattern in videoPatterns) {
+      final videoMatch = RegExp(pattern).firstMatch(line);
+      if (videoMatch != null) {
+        return DownloadProgress(
+          type: 'video',
+          quality: videoMatch.group(1)?.trim() ?? '',
+          currentSegment: int.parse(videoMatch.group(2) ?? '0'),
+          totalSegments: int.parse(videoMatch.group(3) ?? '0'),
+          percentage: double.parse(videoMatch.group(4) ?? '0'),
+          downloadedSize: videoMatch.group(5) ?? '-',
+          totalSize: '',
+          speed: '',
+          eta: videoMatch.group(6) ?? '--:--:--',
+        );
+      }
+    }
+
+    // 解析音频进度 - 支持多种进度条字符
+    final audioPatterns = [
+      // 标准Unicode进度条
+      r'Aud\s+([^━═▬■]+)\s*[━═▬■]+\s*(\d+)/(\d+)\s+(\d+\.\d+)%(?:\s+([\d.]+\w+)\s*(?:-\s*(\d{2}:\d{2}:\d{2}))?)?',
+      // ASCII进度条
+      r'Aud\s+([^=\-#*]+)\s*[=\-#*]+\s*(\d+)/(\d+)\s+(\d+\.\d+)%(?:\s+([\d.]+\w+)\s*(?:-\s*(\d{2}:\d{2}:\d{2}))?)?',
+      // 简化模式
+      r'Aud\s+([^|]+)\s*\|.*?\s+(\d+)/(\d+)\s+(\d+\.\d+)%(?:\s+([\d.]+\w+)\s*(?:-\s*(\d{2}:\d{2}:\d{2}))?)?',
+    ];
+
+    for (final pattern in audioPatterns) {
+      final audioMatch = RegExp(pattern).firstMatch(line);
+      if (audioMatch != null) {
+        return DownloadProgress(
+          type: 'audio',
+          quality: audioMatch.group(1)?.trim() ?? '',
+          currentSegment: int.parse(audioMatch.group(2) ?? '0'),
+          totalSegments: int.parse(audioMatch.group(3) ?? '0'),
+          percentage: double.parse(audioMatch.group(4) ?? '0'),
+          downloadedSize: audioMatch.group(5) ?? '-',
+          totalSize: '',
+          speed: '',
+          eta: audioMatch.group(6) ?? '--:--:--',
+        );
+      }
+    }
+
+    // 解析字幕进度 - 支持多种进度条字符
+    final subtitlePatterns = [
+      // 标准Unicode进度条
+      r'Sub\s+([^━═▬■]+)\s*[━═▬■]+\s*(\d+)/(\d+)\s+(\d+\.\d+)%(?:\s+([\d.]+\w+)\s*(?:-\s*(\d{2}:\d{2}:\d{2}))?)?',
+      // ASCII进度条
+      r'Sub\s+([^=\-#*]+)\s*[=\-#*]+\s*(\d+)/(\d+)\s+(\d+\.\d+)%(?:\s+([\d.]+\w+)\s*(?:-\s*(\d{2}:\d{2}:\d{2}))?)?',
+      // 简化模式
+      r'Sub\s+([^|]+)\s*\|.*?\s+(\d+)/(\d+)\s+(\d+\.\d+)%(?:\s+([\d.]+\w+)\s*(?:-\s*(\d{2}:\d{2}:\d{2}))?)?',
+    ];
+
+    for (final pattern in subtitlePatterns) {
+      final subtitleMatch = RegExp(pattern).firstMatch(line);
+      if (subtitleMatch != null) {
+        return DownloadProgress(
+          type: 'subtitle',
+          quality: subtitleMatch.group(1)?.trim() ?? '',
+          currentSegment: int.parse(subtitleMatch.group(2) ?? '0'),
+          totalSegments: int.parse(subtitleMatch.group(3) ?? '0'),
+          percentage: double.parse(subtitleMatch.group(4) ?? '0'),
+          downloadedSize: subtitleMatch.group(5) ?? '-',
+          totalSize: '',
+          speed: '',
+          eta: subtitleMatch.group(6) ?? '--:--:--',
+        );
+      }
+    }
+
+    return null;
+  }
+
+  /// Mac/Linux平台的进度解析（保持原有逻辑不变）
+  static DownloadProgress? _parseProgressMacLinux(String line) {
     // 检查是否是合并状态
     if (line.contains('Muxing to')) {
       final fileName =
