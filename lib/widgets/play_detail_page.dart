@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:dio/dio.dart';
+import 'dart:io';
+import 'package:path/path.dart' as path;
 import 'main_layout.dart';
 import '../services/global_download_manager.dart';
+import '../services/download_service.dart';
 import '../utils/dio_helper.dart';
 
 class PlayDetailPage extends StatefulWidget {
@@ -240,6 +243,82 @@ class _PlayDetailPageState extends State<PlayDetailPage> {
     await _fetchStreamToken('CONTENT/PLAY?contentId=${widget.itemId}', title);
   }
 
+  /// 下载封面图片
+  Future<void> _downloadCover(String imageUrl, String title) async {
+    try {
+      // 显示开始下载的提示
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('开始下载封面...'),
+          duration: Duration(seconds: 2),
+        ),
+      );
+
+      // 获取下载路径
+      final downloadPath = await DownloadService.getDownloadPath();
+
+      // 清理文件名，移除不安全的字符
+      final cleanTitle = title
+          .replaceAll(RegExp(r'[<>:"/\\|?*]'), '_')
+          .replaceAll(RegExp(r'\s+'), '_')
+          .trim();
+
+      // 获取图片扩展名
+      final uri = Uri.parse(imageUrl);
+      String extension = path.extension(uri.path);
+      if (extension.isEmpty) {
+        extension = '.jpg'; // 默认使用 jpg 扩展名
+      }
+
+      // 构建文件名
+      final fileName = '${cleanTitle}_cover$extension';
+      final filePath = path.join(downloadPath, fileName);
+
+      print('Downloading cover from: $imageUrl');
+      print('Saving to: $filePath');
+
+      // 下载图片
+      final response = await dio.get(
+        imageUrl,
+        options: Options(responseType: ResponseType.bytes),
+      );
+
+      // 保存文件
+      final file = File(filePath);
+      await file.writeAsBytes(response.data);
+
+      // 显示成功提示
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('封面下载成功: $fileName'),
+            backgroundColor: Colors.green,
+            duration: const Duration(seconds: 3),
+            action: SnackBarAction(
+              label: '查看',
+              textColor: Colors.white,
+              onPressed: () {
+                // 可以添加打开文件夹的功能
+                print('Cover saved to: $filePath');
+              },
+            ),
+          ),
+        );
+      }
+    } catch (e) {
+      print('Error downloading cover: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('封面下载失败: $e'),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
+    }
+  }
+
   /// 显示下载进度
   void _showDownloadProgress(String taskId, String title) {
     final downloadManager = GlobalDownloadManager();
@@ -445,27 +524,51 @@ class _PlayDetailPageState extends State<PlayDetailPage> {
           children: [
             // 视频封面
             if (imageUrl != null)
-              Container(
-                width: double.infinity,
-                height: 200,
-                clipBehavior: Clip.hardEdge,
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Image.network(
-                  imageUrl,
-                  fit: BoxFit.cover,
-                  errorBuilder: (context, error, stackTrace) {
-                    return Container(
-                      color: Colors.grey[300],
-                      child: const Icon(
-                        Icons.image_not_supported,
-                        color: Colors.grey,
-                        size: 48,
+              Stack(
+                children: [
+                  Container(
+                    width: double.infinity,
+                    height: 200,
+                    clipBehavior: Clip.hardEdge,
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Image.network(
+                      imageUrl,
+                      fit: BoxFit.cover,
+                      errorBuilder: (context, error, stackTrace) {
+                        return Container(
+                          color: Colors.grey[300],
+                          child: const Icon(
+                            Icons.image_not_supported,
+                            color: Colors.grey,
+                            size: 48,
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                  // 下载封面按钮
+                  Positioned(
+                    top: 8,
+                    right: 8,
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: Colors.black.withOpacity(0.7),
+                        borderRadius: BorderRadius.circular(20),
                       ),
-                    );
-                  },
-                ),
+                      child: IconButton(
+                        onPressed: () => _downloadCover(imageUrl, title),
+                        icon: const Icon(
+                          Icons.download,
+                          color: Colors.white,
+                          size: 20,
+                        ),
+                        tooltip: '下载封面',
+                      ),
+                    ),
+                  ),
+                ],
               ),
             if (imageUrl != null) const SizedBox(height: 16),
 
