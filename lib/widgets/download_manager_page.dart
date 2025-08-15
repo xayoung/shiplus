@@ -41,7 +41,7 @@ class _DownloadManagerPageState extends State<DownloadManagerPage> {
                     ),
                     const SizedBox(width: 12),
                     const Text(
-                      '下载管理',
+                      'Download Manager',
                       style: TextStyle(
                         fontSize: 24,
                         fontWeight: FontWeight.bold,
@@ -52,10 +52,10 @@ class _DownloadManagerPageState extends State<DownloadManagerPage> {
                 TextButton.icon(
                   onPressed: () {
                     GlobalDownloadManager().clearCompletedTasks();
-                    _showSuccessSnackBar('已清理完成的任务');
+                    _showSuccessSnackBar('Completed tasks cleared');
                   },
                   icon: const Icon(Icons.clear_all, size: 18),
-                  label: const Text('清理完成任务'),
+                  label: const Text('Clear Completed Tasks'),
                 ),
               ],
             ),
@@ -96,7 +96,7 @@ class _DownloadManagerPageState extends State<DownloadManagerPage> {
                                 child: Row(
                                   children: [
                                     const Text(
-                                      '下载任务列表',
+                                      'Download Task List',
                                       style: TextStyle(
                                         fontSize: 16,
                                         fontWeight: FontWeight.w600,
@@ -104,7 +104,7 @@ class _DownloadManagerPageState extends State<DownloadManagerPage> {
                                     ),
                                     const Spacer(),
                                     Text(
-                                      '共 ${tasks.length} 个任务',
+                                      'Total: ${tasks.length} tasks',
                                       style: TextStyle(
                                         fontSize: 14,
                                         color: Colors.grey[600],
@@ -156,7 +156,7 @@ class _DownloadManagerPageState extends State<DownloadManagerPage> {
               ),
               const SizedBox(height: 16),
               Text(
-                '暂无下载任务',
+                'No Download Tasks',
                 style: TextStyle(
                   color: Colors.grey[600],
                   fontSize: 18,
@@ -165,7 +165,7 @@ class _DownloadManagerPageState extends State<DownloadManagerPage> {
               ),
               const SizedBox(height: 8),
               Text(
-                '在播放详情页面点击下载按钮开始下载',
+                'Click the download button on the playback details page to start downloading',
                 style: TextStyle(
                   color: Colors.grey[500],
                   fontSize: 14,
@@ -187,19 +187,19 @@ class _DownloadManagerPageState extends State<DownloadManagerPage> {
           mainAxisAlignment: MainAxisAlignment.spaceAround,
           children: [
             _buildStatItem(
-              '总任务',
+              'Total',
               tasks.length.toString(),
               Icons.list_alt,
               Colors.blue,
             ),
             _buildStatItem(
-              '下载中',
+              'Downloading',
               downloadManager.activeDownloadsCount.toString(),
               Icons.download,
               Colors.orange,
             ),
             _buildStatItem(
-              '已完成',
+              'Completed',
               tasks
                   .where((t) => t.status == DownloadStatus.completed)
                   .length
@@ -208,7 +208,7 @@ class _DownloadManagerPageState extends State<DownloadManagerPage> {
               Colors.green,
             ),
             _buildStatItem(
-              '失败',
+              'Failed',
               tasks
                   .where((t) => t.status == DownloadStatus.failed)
                   .length
@@ -379,7 +379,7 @@ class _DownloadManagerPageState extends State<DownloadManagerPage> {
         Row(
           children: [
             Text(
-              '整体进度: ${tracker.overallProgress.toStringAsFixed(1)}%',
+              'Overall Progress: ${tracker.overallProgress.toStringAsFixed(1)}%',
               style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
             ),
             const Spacer(),
@@ -391,7 +391,7 @@ class _DownloadManagerPageState extends State<DownloadManagerPage> {
                   borderRadius: BorderRadius.circular(4),
                 ),
                 child: Text(
-                  '后处理中',
+                  'Post-processing',
                   style: TextStyle(
                     fontSize: 10,
                     color: Colors.orange[800],
@@ -598,25 +598,25 @@ class _DownloadManagerPageState extends State<DownloadManagerPage> {
             icon: const Icon(Icons.refresh, size: 20),
             onPressed: () {
               GlobalDownloadManager().retryDownload(task.id);
-              _showSuccessSnackBar('重新开始下载: ${task.title}');
+              _showSuccessSnackBar('Restart download: ${task.title}');
             },
-            tooltip: '重试',
+            tooltip: 'Retry',
           ),
         if (task.canCancel)
           IconButton(
             icon: const Icon(Icons.stop, size: 20),
             onPressed: () {
               GlobalDownloadManager().cancelDownload(task.id);
-              _showSuccessSnackBar('已取消并删除下载: ${task.title}');
+              _showSuccessSnackBar('Download cancelled and deleted: ${task.title}');
             },
-            tooltip: '取消并删除',
+            tooltip: 'Cancel and Delete',
           ),
         IconButton(
           icon: const Icon(Icons.delete_outline, size: 20),
           onPressed: () {
             _showDeleteConfirmDialog(task);
           },
-          tooltip: '删除',
+          tooltip: 'Delete',
         ),
       ],
     );
@@ -641,20 +641,20 @@ class _DownloadManagerPageState extends State<DownloadManagerPage> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('删除任务'),
-        content: Text('确定要删除下载任务 "${task.title}" 吗？'),
+        title: const Text('Delete Task'),
+        content: Text('Are you sure you want to delete the download task "${task.title}"?'),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(),
-            child: const Text('取消'),
+            child: const Text('Cancel'),
           ),
           TextButton(
             onPressed: () {
               Navigator.of(context).pop();
               GlobalDownloadManager().removeDownloadTask(task.id);
-              _showSuccessSnackBar('已删除任务: ${task.title}');
+              _showSuccessSnackBar('Task deleted: ${task.title}');
             },
-            child: const Text('删除'),
+            child: const Text('Delete'),
           ),
         ],
       ),

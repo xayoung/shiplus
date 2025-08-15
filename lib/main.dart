@@ -1,7 +1,14 @@
 import 'package:flutter/material.dart';
 import 'widgets/main_layout.dart';
+import 'services/formula1_service.dart';
 
-void main() {
+void main() async {
+  // 确保Flutter绑定初始化
+  WidgetsFlutterBinding.ensureInitialized();
+  
+  // 初始化Formula1Service，从本地存储加载用户数据
+  await Formula1Service.initialize();
+  
   runApp(const MyApp());
 }
 

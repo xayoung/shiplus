@@ -6,6 +6,7 @@ import 'main_layout.dart';
 import '../services/global_download_manager.dart';
 import '../services/download_service.dart';
 import '../utils/dio_helper.dart';
+import '../services/formula1_service.dart';
 
 class PlayDetailPage extends StatefulWidget {
   final String itemId;
@@ -40,48 +41,8 @@ class _PlayDetailPageState extends State<PlayDetailPage> {
           duration: const Duration(seconds: 2),
         ),
       );
-
-      // 第一步：POST请求获取token
-      final tokenResponse = await dio.post(
-        'https://www.histreams.net/api/token_v3',
-        options: Options(
-          headers: {
-            'Content-Type': 'application/json',
-          },
-        ),
-        data: {
-          'type': '0',
-          's': '6550010',
-        },
-      );
-
-      if (tokenResponse.statusCode == 200) {
-        final tokenData = tokenResponse.data;
-        final token = tokenData['token']?[0]?['token']?.toString();
-
-        if (token != null && token.isNotEmpty) {
-          print('Token获取成功: $token');
-
-          // 第二步：使用token请求流媒体数据
-          await _fetchStreamData(playbackUrl, token, title);
-        } else {
-          print('Token获取失败: 响应中没有找到token');
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('获取访问令牌失败'),
-              duration: Duration(seconds: 2),
-            ),
-          );
-        }
-      } else {
-        print('Token请求失败: ${tokenResponse.statusCode}');
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('获取访问令牌失败: ${tokenResponse.statusCode}'),
-            duration: const Duration(seconds: 2),
-          ),
-        );
-      }
+      final token = await Formula1Service.currentUserData!['data']['subscriptionToken'];
+      await _fetchStreamData(playbackUrl, token, title);
     } catch (e) {
       print('Token请求异常: $e');
       ScaffoldMessenger.of(context).showSnackBar(
@@ -166,6 +127,10 @@ class _PlayDetailPageState extends State<PlayDetailPage> {
             ),
           );
         }
+      }  else if (response.statusCode == 401) {
+        final refreshedData = await Formula1Service.refreshToken();
+        final refresToken = refreshedData!['data']['subscriptionToken'];
+        await _fetchStreamData(playbackUrl, refresToken, title);
       } else {
         print('流媒体数据请求失败: ${response.statusCode}');
         print('Response: ${response.data}');

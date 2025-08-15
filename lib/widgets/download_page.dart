@@ -41,7 +41,7 @@ class _DownloadPageState extends State<DownloadPage> {
         _currentPath = path;
       });
     } catch (e) {
-      _showErrorSnackBar('获取下载路径失败: $e');
+      _showErrorSnackBar('Failed to get download path: $e');
     }
   }
 
@@ -50,10 +50,10 @@ class _DownloadPageState extends State<DownloadPage> {
     if (newPath.isNotEmpty) {
       DownloadService.setDownloadPath(newPath);
       _loadCurrentPath();
-      _showSuccessSnackBar('下载路径已更新');
+      _showSuccessSnackBar('Download path updated');
       _pathController.clear();
     } else {
-      _showErrorSnackBar('请输入有效的路径');
+      _showErrorSnackBar('Please enter a valid path');
     }
   }
 
@@ -61,7 +61,7 @@ class _DownloadPageState extends State<DownloadPage> {
     DownloadService.clearCustomDownloadPath();
     _loadCurrentPath();
     _pathController.clear();
-    _showSuccessSnackBar('已恢复默认下载路径');
+    _showSuccessSnackBar('Default download path restored');
   }
 
   void _showSuccessSnackBar(String message) {
@@ -94,13 +94,13 @@ class _DownloadPageState extends State<DownloadPage> {
     final fileName = _fileNameController.text.trim();
 
     if (url.isEmpty || fileName.isEmpty) {
-      _showErrorSnackBar('请输入URL和文件名');
+      _showErrorSnackBar('Please enter URL and file name');
       return;
     }
 
     // 验证URL格式
     if (!url.startsWith('http://') && !url.startsWith('https://')) {
-      _showErrorSnackBar('请输入有效的URL（以http://或https://开头）');
+      _showErrorSnackBar('Please enter a valid URL (starting with http:// or https://)');
       return;
     }
 
@@ -197,7 +197,7 @@ class _DownloadPageState extends State<DownloadPage> {
     return Column(
       children: [
         if (_videoProgress != null) ...[
-          Text('视频: ${_videoProgress!.quality}'),
+          Text('Video: ${_videoProgress!.quality}'),
           LinearProgressIndicator(value: _videoProgress!.percentage / 100),
           Text(
               '${_videoProgress!.currentSegment}/${_videoProgress!.totalSegments} (${_videoProgress!.percentage.toStringAsFixed(1)}%)'),
@@ -205,7 +205,7 @@ class _DownloadPageState extends State<DownloadPage> {
               '${_videoProgress!.downloadedSize}/${_videoProgress!.totalSize} - ${_videoProgress!.speed} - ETA: ${_videoProgress!.eta}'),
         ],
         if (_audioProgress != null) ...[
-          Text('音频: ${_audioProgress!.quality}'),
+          Text('Audio: ${_audioProgress!.quality}'),
           LinearProgressIndicator(value: _audioProgress!.percentage / 100),
           Text(
               '${_audioProgress!.currentSegment}/${_audioProgress!.totalSegments} (${_audioProgress!.percentage.toStringAsFixed(1)}%)'),
@@ -218,7 +218,7 @@ class _DownloadPageState extends State<DownloadPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('M3U8视频下载器'),
+        title: const Text('M3U8 Video Downloader'),
         backgroundColor: Theme.of(context).colorScheme.inversePrimary,
       ),
       body: SingleChildScrollView(
@@ -234,7 +234,7 @@ class _DownloadPageState extends State<DownloadPage> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     const Text(
-                      '下载设置',
+                      'Download Settings',
                       style: TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.bold,
@@ -242,7 +242,7 @@ class _DownloadPageState extends State<DownloadPage> {
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      '当前下载路径:',
+                      'Current Download Path:',
                       style: TextStyle(
                         color: Colors.grey[600],
                         fontSize: 14,
@@ -256,7 +256,7 @@ class _DownloadPageState extends State<DownloadPage> {
                         borderRadius: BorderRadius.circular(4),
                       ),
                       child: Text(
-                        _currentPath.isEmpty ? '加载中...' : _currentPath,
+                        _currentPath.isEmpty ? 'Loading...' : _currentPath,
                         style: const TextStyle(
                           fontFamily: 'monospace',
                           fontSize: 12,
@@ -270,8 +270,8 @@ class _DownloadPageState extends State<DownloadPage> {
                           child: TextField(
                             controller: _pathController,
                             decoration: const InputDecoration(
-                              labelText: '自定义下载路径（可选）',
-                              hintText: '留空使用默认路径',
+                              labelText: 'Custom Download Path (Optional)',
+                              hintText: 'Leave empty to use default path',
                               border: OutlineInputBorder(),
                             ),
                           ),
@@ -279,12 +279,12 @@ class _DownloadPageState extends State<DownloadPage> {
                         const SizedBox(width: 8),
                         ElevatedButton(
                           onPressed: _updateDownloadPath,
-                          child: const Text('设置'),
+                          child: const Text('Set'),
                         ),
                         const SizedBox(width: 8),
                         ElevatedButton(
                           onPressed: _clearCustomPath,
-                          child: const Text('重置'),
+                          child: const Text('Reset'),
                         ),
                       ],
                     ),
@@ -302,7 +302,7 @@ class _DownloadPageState extends State<DownloadPage> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     const Text(
-                      '视频下载',
+                      'Video Download',
                       style: TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.bold,
@@ -312,8 +312,8 @@ class _DownloadPageState extends State<DownloadPage> {
                     TextField(
                       controller: _urlController,
                       decoration: const InputDecoration(
-                        labelText: 'M3U8视频链接',
-                        hintText: '请输入M3U8视频链接',
+                        labelText: 'M3U8 Video Link',
+                        hintText: 'Please enter M3U8 video link',
                         border: OutlineInputBorder(),
                       ),
                       enabled: !_isDownloading,
@@ -322,8 +322,8 @@ class _DownloadPageState extends State<DownloadPage> {
                     TextField(
                       controller: _fileNameController,
                       decoration: const InputDecoration(
-                        labelText: '文件名',
-                        hintText: '请输入保存的文件名（不含扩展名）',
+                        labelText: 'File Name',
+                        hintText: 'Please enter file name (without extension)',
                         border: OutlineInputBorder(),
                       ),
                       enabled: !_isDownloading,
@@ -344,7 +344,7 @@ class _DownloadPageState extends State<DownloadPage> {
                                 ? Icons.keyboard_arrow_down
                                 : Icons.keyboard_arrow_right,
                           ),
-                          const Text('高级选项'),
+                          const Text('Advanced Options'),
                         ],
                       ),
                     ),
@@ -355,8 +355,8 @@ class _DownloadPageState extends State<DownloadPage> {
                       TextField(
                         controller: _extraArgsController,
                         decoration: const InputDecoration(
-                          labelText: '额外参数（可选）',
-                          hintText: '例如: --auto-select --select-video best',
+                          labelText: 'Extra Parameters (Optional)',
+                          hintText: 'Example: --auto-select --select-video best',
                           border: OutlineInputBorder(),
                         ),
                         enabled: !_isDownloading,
@@ -389,11 +389,11 @@ class _DownloadPageState extends State<DownloadPage> {
                                     ),
                                   ),
                                   SizedBox(width: 12),
-                                  Text('下载中...',
+                                  Text('Downloading...',
                                       style: TextStyle(color: Colors.white)),
                                 ],
                               )
-                            : const Text('开始下载',
+                            : const Text('Start Download',
                                 style: TextStyle(color: Colors.white)),
                       ),
                     ),
@@ -453,7 +453,7 @@ class _DownloadPageState extends State<DownloadPage> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       const Text(
-                        '下载进度',
+                        'Download Progress',
                         style: TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.bold,
@@ -480,7 +480,7 @@ class _DownloadPageState extends State<DownloadPage> {
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
                           Text(
-                            '下载日志 (${_downloadLogs.length} 条)',
+                            'Download Logs (${_downloadLogs.length})',
                             style: const TextStyle(
                               fontSize: 16,
                               fontWeight: FontWeight.bold,
@@ -492,7 +492,7 @@ class _DownloadPageState extends State<DownloadPage> {
                                 _downloadLogs.clear();
                               });
                             },
-                            child: const Text('清空'),
+                            child: const Text('Clear'),
                           ),
                         ],
                       ),
