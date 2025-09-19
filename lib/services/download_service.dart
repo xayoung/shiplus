@@ -135,13 +135,13 @@ class DownloadService {
       );
 
       if (result != 0) {
-        throw Exception('下载失败，退出码: $result');
+        throw Exception('ERROR: $result');
       }
 
-      print('视频下载成功: $cleanFileName');
-      onLog?.call('🎉 视频下载成功: $cleanFileName');
+      // print('视频下载成功: $cleanFileName');
+      // onLog?.call('🎉 视频下载成功: $cleanFileName');
     } catch (e) {
-      print('下载视频时发生错误: $e');
+      // print('下载视频时发生错误: $e');
       rethrow;
     }
   }

@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:path_provider/path_provider.dart';
 import '../services/n_m3u8dl_config_service.dart';
 import '../models/download_progress.dart';
+import '../services/proxy_service.dart';
 
 /// 音频语言选择枚举
 enum AudioLanguage {
@@ -258,6 +259,15 @@ class N_m3u8DL_RE {
         fullArgs.add('all');
       }
 
+      final proxyConfig = await ProxyService.getProxyConfig();
+      final proxyEnabled = proxyConfig['enabled'] as bool;
+      final proxyUrl = proxyConfig['url'] as String;
+
+      if (proxyEnabled && proxyUrl.isNotEmpty) {
+        fullArgs.add('--custom-proxy');
+        fullArgs.add(proxyUrl);
+      }
+
       // 添加额外参数
       if (extraArgs != null && extraArgs.isNotEmpty) {
         fullArgs.addAll(extraArgs);
@@ -396,9 +406,9 @@ class N_m3u8DL_RE {
         return exitCode;
       } else {
         // 收集所有错误信息
-        final allErrors = stderr.isNotEmpty ? stderr.join('\n') : '未知错误';
+        final allErrors = stderr.isNotEmpty ? stderr.join('\n') : 'ERROR';
         final errorMessage =
-            '❌ [$timestamp] 下载失败 (退出码: $exitCode):\n$allErrors';
+            '❌ [$timestamp] ERROR ( $exitCode):\n$allErrors';
         onLog?.call(errorMessage);
         throw Exception(errorMessage);
       }

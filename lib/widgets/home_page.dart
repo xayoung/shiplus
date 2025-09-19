@@ -78,7 +78,7 @@ class _HomePageState extends State<HomePage> {
         _error = null;
       });
 
-      final dio = DioHelper.createDioWithCookies();
+      final dio = await DioHelper.createDioWithCookies();
       final response = await dio.get(
         'https://f1tv.formula1.com/2.0/R/ENG/WEB_DASH/ALL/PAGE/10295/F1_TV_Pro_Annual/3',
         options: Options(

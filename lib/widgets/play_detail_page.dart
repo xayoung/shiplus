@@ -23,14 +23,25 @@ class _PlayDetailPageState extends State<PlayDetailPage> {
   List<dynamic>? _additionalStreams;
   bool _isLoading = true;
   String? _error;
-  late final Dio dio;
+  Dio? dio;
 
   @override
   void initState() {
     super.initState();
+    _initializeDio();
+  }
+
+  Future<void> _initializeDio() async {
+    try {
       // Create Dio instance with Cookie manager
-    dio = DioHelper.createDioWithCookies(enableDebug: true);
-    _fetchVideoDetail();
+      dio = await DioHelper.createDioWithCookies(enableDebug: true);
+      _fetchVideoDetail();
+    } catch (e) {
+      setState(() {
+        _error = 'Failed to initialize network client: $e';
+        _isLoading = false;
+      });
+    }
   }
 
   Future<void> _fetchStreamToken(String playbackUrl, String title) async {
@@ -69,7 +80,10 @@ class _PlayDetailPageState extends State<PlayDetailPage> {
       //     'device=web;screen=browser;os=mac os;browser=chrome;browserVersion=137.0.0.0;model=Macintosh;osVersion=14.6.1;appVersion=release-R43.0.1;playerVersion=8.212.0';
 
       print('Requesting streaming data: $url');
-      final response = await dio.get(
+      if (dio == null) {
+        throw Exception('Network client not initialized');
+      }
+      final response = await dio!.get(
         url,
         options: Options(
           headers: {
@@ -188,7 +202,10 @@ class _PlayDetailPageState extends State<PlayDetailPage> {
       final url =
           'https://f1tv.formula1.com/3.0/A/ENG/WEB_DASH/ALL/CONTENT/VIDEO/${widget.itemId}/Anonymous/2?contentId=${widget.itemId}&entitlement=Anonymous';
 
-      final response = await dio.get(
+      if (dio == null) {
+        throw Exception('Network client not initialized');
+      }
+      final response = await dio!.get(
         url,
         options: Options(
           headers: {
@@ -268,7 +285,10 @@ class _PlayDetailPageState extends State<PlayDetailPage> {
       print('Saving to: $filePath');
 
       // Download image
-      final response = await dio.get(
+      if (dio == null) {
+        throw Exception('Network client not initialized');
+      }
+      final response = await dio!.get(
         imageUrl,
         options: Options(responseType: ResponseType.bytes),
       );
@@ -334,7 +354,10 @@ class _PlayDetailPageState extends State<PlayDetailPage> {
     
     try {
       // Request the m3u8 content
-      final response = await dio.get(
+      if (dio == null) {
+        throw Exception('Network client not initialized');
+      }
+      final response = await dio!.get(
         streamUrl,
         options: Options(
           responseType: ResponseType.plain,

@@ -1,13 +1,20 @@
 import 'package:dio/dio.dart';
 import 'package:cookie_jar/cookie_jar.dart';
 import 'package:dio_cookie_manager/dio_cookie_manager.dart';
+import 'package:dio/io.dart';
+import 'dart:io';
+import '../services/proxy_service.dart';
 
 /// Dio 工具类，用于创建 Dio 实例
 class DioHelper {
   /// 创建带有 CookieManager 的 Dio 实例
   /// 注意：需要手动添加 Cookie 管理器
-  static Dio createDioWithCookies({bool enableDebug = false}) {
+  static Future<Dio> createDioWithCookies({bool enableDebug = false}) async {
     final dio = Dio();
+    
+    // 配置代理
+    await _configureProxy(dio);
+    
     // 注意：Cookie 管理器需要在调用处手动添加
     final cookieJar = CookieJar();
     dio.interceptors.add(CookieManager(cookieJar));
@@ -31,8 +38,76 @@ class DioHelper {
   }
 
   /// 创建普通的 Dio 实例（不带 Cookie 管理）
-  static Dio createPlainDio() {
-    return Dio();
+  static Future<Dio> createPlainDio() async {
+    final dio = Dio();
+    
+    // 配置代理
+    await _configureProxy(dio);
+    
+    return dio;
+  }
+
+  /// 配置代理设置
+  static Future<void> _configureProxy(Dio dio) async {
+    try {
+      final proxyConfig = await ProxyService.getProxyConfig();
+      final proxyEnabled = proxyConfig['enabled'] as bool;
+      final proxyUrl = proxyConfig['url'] as String;
+
+      if (proxyEnabled && proxyUrl.isNotEmpty) {
+        // 配置代理
+        (dio.httpClientAdapter as IOHttpClientAdapter).createHttpClient = () {
+          final client = HttpClient();
+          
+          // 解析代理URL
+          final uri = Uri.parse(proxyUrl);
+          final proxyHost = uri.host;
+          final proxyPort = uri.port;
+          
+          // if (uri.scheme == 'http' || uri.scheme == 'https') {
+          //   // HTTP/HTTPS 代理
+          //   client.findProxy = (url) {
+          //     return 'PROXY $proxyHost:$proxyPort';
+          //   };
+          // }
+          client.findProxy = (url) {
+              return 'PROXY $proxyHost:$proxyPort';
+            }; 
+          
+          // else if (uri.scheme == 'socks5') {
+          //   // SOCKS5 代理
+          //   client.findProxy = (url) {
+          //     return 'SOCKS5 $proxyHost:$proxyPort';
+          //   };
+          // }
+          
+          // 处理代理认证
+          if (uri.userInfo.isNotEmpty) {
+            final credentials = uri.userInfo.split(':');
+            if (credentials.length == 2) {
+              client.addProxyCredentials(
+                proxyHost,
+                proxyPort,
+                'realm',
+                HttpClientBasicCredentials(credentials[0], credentials[1]),
+              );
+            }
+          }
+          
+          // 忽略证书错误（可选，用于开发环境）
+          client.badCertificateCallback = (cert, host, port) => true;
+          
+          return client;
+        };
+        
+        print('🌐 Proxy configured: $proxyUrl');
+      } else {
+        print('🌐 No proxy configured');
+      }
+    } catch (e) {
+      print('❌ Error configuring proxy: $e');
+      // 代理配置失败时继续使用默认配置
+    }
   }
 
   /// 打印指定 URL 的 cookies（用于调试）

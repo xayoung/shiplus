@@ -4,6 +4,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../services/download_service.dart';
 import '../services/n_m3u8dl_config_service.dart';
 import '../services/formula1_service.dart';
+import '../services/proxy_service.dart';
 import 'package:intl/intl.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 
@@ -18,6 +19,7 @@ class _SettingsPageState extends State<SettingsPage> {
   final _pathController = TextEditingController();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
+  final _proxyUrlController = TextEditingController();
   String _currentPath = '';
   
   // Formula 1 data
@@ -32,12 +34,17 @@ class _SettingsPageState extends State<SettingsPage> {
   String _selectedRange = 'SDR';
   String _selectedAudioLang = 'eng';
 
+  // Proxy settings
+  bool _proxyEnabled = false;
+  String _proxyUrl = '';
+
   @override
   void initState() {
     super.initState();
     _loadCurrentPath();
     _loadDownloadConfig();
     _loadFormula1Data();
+    _loadProxyConfig();
   }
   
   // Get subscription type
@@ -195,6 +202,55 @@ class _SettingsPageState extends State<SettingsPage> {
       setState(() {
         _isLoadingF1Data = false;
       });
+    }
+  }
+
+  Future<void> _loadProxyConfig() async {
+    try {
+      final enabled = await ProxyService.getProxyEnabled();
+      final url = await ProxyService.getProxyUrl();
+      setState(() {
+        _proxyEnabled = enabled;
+        _proxyUrl = url;
+        _proxyUrlController.text = url;
+      });
+    } catch (e) {
+      _showErrorSnackBar('Failed to load proxy configuration: $e');
+    }
+  }
+
+  Future<void> _saveProxyConfig() async {
+    try {
+      final url = _proxyUrlController.text.trim();
+      
+      // Validate proxy URL if not empty
+      if (url.isNotEmpty && !ProxyService.isValidProxyUrl(url)) {
+        _showErrorSnackBar('Invalid proxy URL format. Please use http://, https://, or socks5:// format.');
+        return;
+      }
+      
+      await ProxyService.setProxyConfig(
+        enabled: _proxyEnabled,
+        url: url,
+      );
+      
+      setState(() {
+        _proxyUrl = url;
+      });
+      
+      _showSuccessSnackBar('Proxy configuration saved');
+    } catch (e) {
+      _showErrorSnackBar('Failed to save proxy configuration: $e');
+    }
+  }
+
+  Future<void> _resetProxyConfig() async {
+    try {
+      await ProxyService.resetToDefaults();
+      await _loadProxyConfig();
+      _showSuccessSnackBar('Proxy configuration reset to defaults');
+    } catch (e) {
+      _showErrorSnackBar('Failed to reset proxy configuration: $e');
     }
   }
 
@@ -798,6 +854,8 @@ class _SettingsPageState extends State<SettingsPage> {
               ),
             ),
             
+            
+
             const SizedBox(height: 24),
             Card(
               elevation: 2,
@@ -938,6 +996,139 @@ class _SettingsPageState extends State<SettingsPage> {
               ),
             ),
 
+            const SizedBox(height: 24),
+            Card(
+              elevation: 2,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.all(24.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(
+                          Icons.network_check,
+                          color: Theme.of(context).primaryColor,
+                          size: 24,
+                        ),
+                        const SizedBox(width: 12),
+                        const Text(
+                          'Proxy Settings',
+                          style: TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            'Enable Proxy',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w500,
+                              color: Colors.grey[700],
+                            ),
+                          ),
+                        ),
+                        Switch(
+                          value: _proxyEnabled,
+                          onChanged: (value) {
+                            setState(() {
+                              _proxyEnabled = value;
+                            });
+                          },
+                          activeColor: Theme.of(context).primaryColor,
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    TextField(
+                      controller: _proxyUrlController,
+                      enabled: _proxyEnabled,
+                      decoration: InputDecoration(
+                        labelText: 'Proxy URL',
+                        hintText: 'http://proxy.example.com:8080 or socks5://proxy.example.com:1080',
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        prefixIcon: const Icon(Icons.link),
+                        helperText: 'Supports HTTP, HTTPS, and SOCKS5 proxies',
+                        helperMaxLines: 2,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    if (_proxyEnabled && _proxyUrl.isNotEmpty) ...[
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: Colors.blue[50],
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: Colors.blue[200]!),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(Icons.info_outline, size: 16, color: Colors.blue[700]),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                'Current proxy: $_proxyUrl',
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  color: Colors.blue[700],
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                    ],
+                    Row(
+                      children: [
+                        Expanded(
+                          child: ElevatedButton.icon(
+                            onPressed: _saveProxyConfig,
+                            icon: const Icon(Icons.save, size: 18),
+                            label: const Text('Save Proxy Settings'),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.green,
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: OutlinedButton.icon(
+                            onPressed: _resetProxyConfig,
+                            icon: const Icon(Icons.refresh, size: 18),
+                            label: const Text('Reset to Default'),
+                            style: OutlinedButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+
 
             const SizedBox(height: 24),
             Card(
@@ -964,7 +1155,7 @@ class _SettingsPageState extends State<SettingsPage> {
                               mainAxisSize: MainAxisSize.min,
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text('Version: 1.0.0'),
+                                Text('Version: 1.1.0'),
                                 SizedBox(height: 8),
                                 SizedBox(
                                   width: 400, // Fixed width in logical pixels
@@ -1049,7 +1240,7 @@ class _SettingsPageState extends State<SettingsPage> {
                                       InkWell(
                                         onTap: () {
                                           try {
-                                            final Uri url = Uri.parse('https://support.formula1.com/s/article/2023-Location-Availability?language=en_US');
+                                            final Uri url = Uri.parse('https://github.com/xayoung/shiplus/issues');
                                             launchUrl(url, mode: LaunchMode.externalApplication);
                                           } catch (e) {
                                             print('无法打开URL: $e');
