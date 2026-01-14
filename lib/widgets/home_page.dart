@@ -80,7 +80,7 @@ class _HomePageState extends State<HomePage> {
 
       final dio = await DioHelper.createDioWithCookies();
       final response = await dio.get(
-        'https://f1tv.formula1.com/2.0/R/ENG/WEB_DASH/ALL/PAGE/10295/F1_TV_Pro_Annual/3',
+        'https://f1tv.formula1.com/2.0/R/ENG/WEB_DASH/ALL/PAGE/12343/F1_TV_Pro_Annual/3',
         options: Options(
           headers: {
             'Content-Type': 'application/json',
@@ -227,15 +227,15 @@ class _HomePageState extends State<HomePage> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           // 页面标题
-          const Text(
-            '2025 Season',
-            style: TextStyle(
-              fontSize: 28,
-              fontWeight: FontWeight.bold,
-              color: Color(0xFF1E1E1E),
-            ),
-          ),
-          const SizedBox(height: 32),
+          // const Text(
+          //   '2025 Season',
+          //   style: TextStyle(
+          //     fontSize: 28,
+          //     fontWeight: FontWeight.bold,
+          //     color: Color(0xFF1E1E1E),
+          //   ),
+          // ),
+          // const SizedBox(height: 32),
 
           // 内容列表
           _buildItemsList(),

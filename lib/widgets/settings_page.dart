@@ -21,7 +21,7 @@ class _SettingsPageState extends State<SettingsPage> {
   final _passwordController = TextEditingController();
   final _proxyUrlController = TextEditingController();
   String _currentPath = '';
-  
+
   // Formula 1 data
   String? _reese84Token;
   Map<String, dynamic>? _formula1UserData;
@@ -46,13 +46,14 @@ class _SettingsPageState extends State<SettingsPage> {
     _loadFormula1Data();
     _loadProxyConfig();
   }
-  
+
   // Get subscription type
   String _getSubscriptionType() {
-    if (_formula1UserData == null || _formula1UserData!['SubscriptionInfo'] == null) {
+    if (_formula1UserData == null ||
+        _formula1UserData!['SubscriptionInfo'] == null) {
       return 'Unknown';
     }
-    
+
     final subscriptionInfo = _formula1UserData!['SubscriptionInfo'];
     if (subscriptionInfo['SubscriptionName'] != null) {
       return subscriptionInfo['SubscriptionName'];
@@ -62,12 +63,12 @@ class _SettingsPageState extends State<SettingsPage> {
       return 'F1 TV';
     }
   }
-  
+
   String _getSubscriptionStatus() {
     if (_formula1UserData == null) {
       return 'Unknown';
     }
-    
+
     if (_formula1UserData!['Status'] != null) {
       final status = _formula1UserData!['Status'].toString().toLowerCase();
       if (status == 'active') {
@@ -78,15 +79,16 @@ class _SettingsPageState extends State<SettingsPage> {
         return status.substring(0, 1).toUpperCase() + status.substring(1);
       }
     }
-    
+
     return 'Unknown';
   }
-  
+
   String _getExpiryDate() {
-    if (_formula1UserData == null || _formula1UserData!['SubscriptionInfo'] == null) {
+    if (_formula1UserData == null ||
+        _formula1UserData!['SubscriptionInfo'] == null) {
       return 'Unknown';
     }
-    
+
     final subscriptionInfo = _formula1UserData!['SubscriptionInfo'];
     if (subscriptionInfo['ExpiryDate'] != null) {
       try {
@@ -101,50 +103,50 @@ class _SettingsPageState extends State<SettingsPage> {
           } else if (int.tryParse(expiryDateValue) != null) {
             final timestamp = int.parse(expiryDateValue);
             expiryDate = DateTime.fromMillisecondsSinceEpoch(
-              timestamp > 9999999999 ? timestamp : timestamp * 1000
-            );
+                timestamp > 9999999999 ? timestamp : timestamp * 1000);
           } else {
             throw FormatException('fail');
           }
         } else if (expiryDateValue is int) {
           expiryDate = DateTime.fromMillisecondsSinceEpoch(
-            expiryDateValue > 9999999999 ? expiryDateValue : expiryDateValue * 1000
-          );
+              expiryDateValue > 9999999999
+                  ? expiryDateValue
+                  : expiryDateValue * 1000);
         } else if (expiryDateValue is double) {
           final timestamp = expiryDateValue.toInt();
           expiryDate = DateTime.fromMillisecondsSinceEpoch(
-            timestamp > 9999999999 ? timestamp : timestamp * 1000
-          );
+              timestamp > 9999999999 ? timestamp : timestamp * 1000);
         } else {
           throw FormatException('fail');
         }
-        
+
         return '${expiryDate.year}-${expiryDate.month.toString().padLeft(2, '0')}-${expiryDate.day.toString().padLeft(2, '0')}';
       } catch (e) {
         return subscriptionInfo['ExpiryDate'].toString();
       }
     }
-    
+
     return 'Unknown';
   }
-  
+
   List<Widget> _buildEntitlementsList() {
-    if (_formula1UserData == null || _formula1UserData!['Entitlements'] == null) {
+    if (_formula1UserData == null ||
+        _formula1UserData!['Entitlements'] == null) {
       return [];
     }
-    
+
     final entitlements = _formula1UserData!['Entitlements'] as List;
     return entitlements.map((entitlement) {
       String name = 'Unknown';
       String country = '';
-      
+
       if (entitlement is Map) {
         if (entitlement['Name'] != null) {
           name = entitlement['Name'];
         } else if (entitlement['ent'] != null) {
           name = entitlement['ent'];
         }
-        
+
         if (entitlement['Country'] != null) {
           country = entitlement['Country'];
         } else if (entitlement['country'] != null) {
@@ -153,7 +155,7 @@ class _SettingsPageState extends State<SettingsPage> {
       } else if (entitlement is String) {
         name = entitlement;
       }
-  
+
       switch (name.toUpperCase()) {
         case 'PREMIUM':
           name = 'F1 TV Premium';
@@ -165,7 +167,7 @@ class _SettingsPageState extends State<SettingsPage> {
           name = 'F1 TV Pro';
           break;
       }
-      
+
       return Padding(
         padding: const EdgeInsets.only(bottom: 4),
         child: Row(
@@ -173,16 +175,14 @@ class _SettingsPageState extends State<SettingsPage> {
             const Icon(Icons.check_circle, size: 16, color: Colors.green),
             const SizedBox(width: 8),
             Expanded(
-              child: country.isNotEmpty 
-                ? Text('$name ($country)') 
-                : Text(name),
+              child: country.isNotEmpty ? Text('$name ($country)') : Text(name),
             ),
           ],
         ),
       );
     }).toList();
   }
-  
+
   Future<void> _loadFormula1Data() async {
     try {
       setState(() {
@@ -190,10 +190,9 @@ class _SettingsPageState extends State<SettingsPage> {
       });
 
       _reese84Token = await Formula1Service.getSavedReese84Token();
-      
 
       _formula1UserData = await Formula1Service.getSavedUserData();
-      
+
       setState(() {
         _isLoadingF1Data = false;
       });
@@ -222,22 +221,23 @@ class _SettingsPageState extends State<SettingsPage> {
   Future<void> _saveProxyConfig() async {
     try {
       final url = _proxyUrlController.text.trim();
-      
+
       // Validate proxy URL if not empty
       if (url.isNotEmpty && !ProxyService.isValidProxyUrl(url)) {
-        _showErrorSnackBar('Invalid proxy URL format. Please use http://, https://, or socks5:// format.');
+        _showErrorSnackBar(
+            'Invalid proxy URL format. Please use http://, https://, or socks5:// format.');
         return;
       }
-      
+
       await ProxyService.setProxyConfig(
         enabled: _proxyEnabled,
         url: url,
       );
-      
+
       setState(() {
         _proxyUrl = url;
       });
-      
+
       _showSuccessSnackBar('Proxy configuration saved');
     } catch (e) {
       _showErrorSnackBar('Failed to save proxy configuration: $e');
@@ -294,7 +294,8 @@ class _SettingsPageState extends State<SettingsPage> {
       _showSuccessSnackBar('Download configuration saved');
     } catch (e) {
       print('Save configuration error details: $e');
-      _showErrorSnackBar('Failed to save download configuration: ${e.toString()}');
+      _showErrorSnackBar(
+          'Failed to save download configuration: ${e.toString()}');
     }
   }
 
@@ -312,7 +313,8 @@ class _SettingsPageState extends State<SettingsPage> {
         _selectedAudioLang = N_m3u8dlConfigService.defaultAudioLang;
       });
 
-      _showErrorSnackBar('Failed to reset download configuration: ${e.toString()}');
+      _showErrorSnackBar(
+          'Failed to reset download configuration: ${e.toString()}');
     }
   }
 
@@ -367,7 +369,7 @@ class _SettingsPageState extends State<SettingsPage> {
       ),
     );
   }
-  
+
   void _showLoginDialog() {
     showDialog(
       context: context,
@@ -412,7 +414,8 @@ class _SettingsPageState extends State<SettingsPage> {
             ),
             ElevatedButton(
               onPressed: () async {
-                if (_emailController.text.isEmpty || _passwordController.text.isEmpty) {
+                if (_emailController.text.isEmpty ||
+                    _passwordController.text.isEmpty) {
                   _showErrorSnackBar('Please enter both email and password');
                   return;
                 }
@@ -421,7 +424,7 @@ class _SettingsPageState extends State<SettingsPage> {
                 setState(() {
                   _isLoadingF1Data = true;
                 });
-                
+
                 BuildContext? loadingDialogContext;
                 showDialog(
                   context: context,
@@ -443,14 +446,15 @@ class _SettingsPageState extends State<SettingsPage> {
                     );
                   },
                 );
-                
+
                 try {
                   final userData = await Formula1Service.login(
                     _emailController.text,
                     _passwordController.text,
                   );
                   WidgetsBinding.instance.addPostFrameCallback((_) {
-                    if (loadingDialogContext != null && Navigator.canPop(loadingDialogContext!)) {
+                    if (loadingDialogContext != null &&
+                        Navigator.canPop(loadingDialogContext!)) {
                       Navigator.of(loadingDialogContext!).pop();
                     }
 
@@ -458,23 +462,25 @@ class _SettingsPageState extends State<SettingsPage> {
                       _isLoadingF1Data = false;
                       if (userData != null) {
                         _formula1UserData = userData;
-                        _showSuccessSnackBar('Successfully logged in to Formula 1');
+                        _showSuccessSnackBar(
+                            'Successfully logged in to Formula 1');
                       } else {
-                        _showErrorSnackBar('Failed to login. Please check your credentials.');
+                        _showErrorSnackBar(
+                            'Failed to login. Please check your credentials.');
                       }
                     });
                   });
                 } catch (e) {
-
                   WidgetsBinding.instance.addPostFrameCallback((_) {
-                    if (loadingDialogContext != null && Navigator.canPop(loadingDialogContext!)) {
+                    if (loadingDialogContext != null &&
+                        Navigator.canPop(loadingDialogContext!)) {
                       Navigator.of(loadingDialogContext!).pop();
                     }
-                    
+
                     setState(() {
                       _isLoadingF1Data = false;
                     });
-                    
+
                     _showErrorSnackBar('Login error: $e');
                   });
                 }
@@ -498,29 +504,31 @@ class _SettingsPageState extends State<SettingsPage> {
           children: [
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [const Text(
-              'Settings',
-              style: TextStyle(
-                fontSize: 28,
-                fontWeight: FontWeight.bold,
-                color: Color(0xFF1E1E1E),
-              ),
-            ),
-              InkWell(
-                onTap: () {
-                  try {
-                    final Uri url = Uri.parse('https://github.com/xayoung/shiplus');
-                    launchUrl(url, mode: LaunchMode.externalApplication);
-                  } catch (e) {
-                    print('无法打开URL: $e');
-                  }
-                },
-                child: const Icon(
-                          FontAwesomeIcons.github,
-                          size: 30,
-                        ),
-              ),
-            ],
+              children: [
+                const Text(
+                  'Settings',
+                  style: TextStyle(
+                    fontSize: 28,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF1E1E1E),
+                  ),
+                ),
+                InkWell(
+                  onTap: () {
+                    try {
+                      final Uri url =
+                          Uri.parse('https://github.com/xayoung/shiplus');
+                      launchUrl(url, mode: LaunchMode.externalApplication);
+                    } catch (e) {
+                      print('无法打开URL: $e');
+                    }
+                  },
+                  child: const Icon(
+                    FontAwesomeIcons.github,
+                    size: 30,
+                  ),
+                ),
+              ],
             ),
             const SizedBox(height: 8),
             Text(
@@ -573,7 +581,8 @@ class _SettingsPageState extends State<SettingsPage> {
                           children: [
                             Row(
                               children: [
-                                const Icon(Icons.person, size: 16, color: Colors.blue),
+                                const Icon(Icons.person,
+                                    size: 16, color: Colors.blue),
                                 const SizedBox(width: 8),
                                 Expanded(
                                   child: Text(
@@ -586,54 +595,66 @@ class _SettingsPageState extends State<SettingsPage> {
                               ],
                             ),
                             const SizedBox(height: 8),
-                            if (_formula1UserData!['FirstName'] != null && _formula1UserData!['LastName'] != null) ...[
+                            if (_formula1UserData!['FirstName'] != null &&
+                                _formula1UserData!['LastName'] != null) ...[
                               Row(
                                 children: [
-                                  const Icon(Icons.badge, size: 16, color: Colors.blue),
+                                  const Icon(Icons.badge,
+                                      size: 16, color: Colors.blue),
                                   const SizedBox(width: 8),
-                                  Text('Name: ${_formula1UserData!['FirstName']} ${_formula1UserData!['LastName']}'),
+                                  Text(
+                                      'Name: ${_formula1UserData!['FirstName']} ${_formula1UserData!['LastName']}'),
                                 ],
                               ),
                               const SizedBox(height: 4),
                             ],
                             Row(
                               children: [
-                                const Icon(Icons.numbers, size: 16, color: Colors.blue),
+                                const Icon(Icons.numbers,
+                                    size: 16, color: Colors.blue),
                                 const SizedBox(width: 8),
-                                Text('User ID: ${_formula1UserData!['SubscriberId'] ?? 'Unknown'}'),
+                                Text(
+                                    'User ID: ${_formula1UserData!['SubscriberId'] ?? 'Unknown'}'),
                               ],
                             ),
                             const SizedBox(height: 4),
                             Row(
                               children: [
-                                const Icon(Icons.public, size: 16, color: Colors.blue),
+                                const Icon(Icons.public,
+                                    size: 16, color: Colors.blue),
                                 const SizedBox(width: 8),
-                                Text('Country: ${_formula1UserData!['HomeCountry'] ?? 'Unknown'}'),
+                                Text(
+                                    'Country: ${_formula1UserData!['HomeCountry'] ?? 'Unknown'}'),
                               ],
                             ),
                             const SizedBox(height: 4),
                             Row(
                               children: [
                                 Icon(
-                                  _getSubscriptionStatus().toLowerCase() == 'active' 
-                                      ? Icons.check_circle 
+                                  _getSubscriptionStatus().toLowerCase() ==
+                                          'active'
+                                      ? Icons.check_circle
                                       : Icons.cancel,
                                   size: 16,
-                                  color: _getSubscriptionStatus().toLowerCase() == 'active'
-                                      ? Colors.green
-                                      : Colors.red,
+                                  color:
+                                      _getSubscriptionStatus().toLowerCase() ==
+                                              'active'
+                                          ? Colors.green
+                                          : Colors.red,
                                 ),
                                 const SizedBox(width: 8),
                                 Text('Status: ${_getSubscriptionStatus()}'),
                               ],
                             ),
                             const SizedBox(height: 4),
-                            if (_formula1UserData!['SubscriptionInfo'] != null) ...[
+                            if (_formula1UserData!['SubscriptionInfo'] !=
+                                null) ...[
                               const Divider(height: 16),
                               const SizedBox(height: 4),
                               Row(
                                 children: [
-                                  const Icon(Icons.card_membership, size: 16, color: Colors.blue),
+                                  const Icon(Icons.card_membership,
+                                      size: 16, color: Colors.blue),
                                   const SizedBox(width: 8),
                                   const Text(
                                     'Subscription Information:',
@@ -650,20 +671,25 @@ class _SettingsPageState extends State<SettingsPage> {
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     Text('Type: ${_getSubscriptionType()}'),
-                                    if (_formula1UserData!['SubscriptionInfo']['IsAutoRenewing'] != null)
-                                      Text('Auto-renewing: ${_formula1UserData!['SubscriptionInfo']['IsAutoRenewing'] ? 'Yes' : 'No'}'),
+                                    if (_formula1UserData!['SubscriptionInfo']
+                                            ['IsAutoRenewing'] !=
+                                        null)
+                                      Text(
+                                          'Auto-renewing: ${_formula1UserData!['SubscriptionInfo']['IsAutoRenewing'] ? 'Yes' : 'No'}'),
                                   ],
                                 ),
                               ),
                             ],
-                            if (_formula1UserData!['Entitlements'] != null && 
-                                _formula1UserData!['Entitlements'] is List && 
-                                (_formula1UserData!['Entitlements'] as List).isNotEmpty) ...[
+                            if (_formula1UserData!['Entitlements'] != null &&
+                                _formula1UserData!['Entitlements'] is List &&
+                                (_formula1UserData!['Entitlements'] as List)
+                                    .isNotEmpty) ...[
                               const Divider(height: 16),
                               const SizedBox(height: 4),
                               Row(
                                 children: [
-                                  const Icon(Icons.verified_user, size: 16, color: Colors.blue),
+                                  const Icon(Icons.verified_user,
+                                      size: 16, color: Colors.blue),
                                   const SizedBox(width: 8),
                                   const Text(
                                     'Entitlements:',
@@ -712,38 +738,45 @@ class _SettingsPageState extends State<SettingsPage> {
                                     );
                                   },
                                 );
-                                
+
                                 try {
-                                  final refreshedData = await Formula1Service.refreshToken();
-                                  if (dialogContext != null && Navigator.canPop(dialogContext!)) {
+                                  final refreshedData =
+                                      await Formula1Service.refreshToken();
+                                  if (dialogContext != null &&
+                                      Navigator.canPop(dialogContext!)) {
                                     Navigator.of(dialogContext!).pop();
                                   }
-                                  
+
                                   setState(() {
                                     _isLoadingF1Data = false;
                                     if (refreshedData != null) {
                                       _formula1UserData = refreshedData;
-                                      _showSuccessSnackBar('Token refreshed successfully');
+                                      _showSuccessSnackBar(
+                                          'Token refreshed successfully');
                                     } else {
-                                      _showErrorSnackBar('Failed to refresh token');
+                                      _showErrorSnackBar(
+                                          'Failed to refresh token');
                                     }
                                   });
                                 } catch (e) {
-                                  if (dialogContext != null && Navigator.canPop(dialogContext!)) {
+                                  if (dialogContext != null &&
+                                      Navigator.canPop(dialogContext!)) {
                                     Navigator.of(dialogContext!).pop();
                                   }
-                                  
+
                                   setState(() {
                                     _isLoadingF1Data = false;
                                   });
-                                  
-                                  _showErrorSnackBar('Error refreshing token: $e');
+
+                                  _showErrorSnackBar(
+                                      'Error refreshing token: $e');
                                 }
                               },
                               icon: const Icon(Icons.refresh, size: 18),
                               label: const Text('Refresh Token'),
                               style: OutlinedButton.styleFrom(
-                                padding: const EdgeInsets.symmetric(vertical: 12),
+                                padding:
+                                    const EdgeInsets.symmetric(vertical: 12),
                                 shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(8),
                                 ),
@@ -759,12 +792,14 @@ class _SettingsPageState extends State<SettingsPage> {
                                   _reese84Token = null;
                                   _formula1UserData = null;
                                 });
-                                _showSuccessSnackBar('Formula 1 login data cleared');
+                                _showSuccessSnackBar(
+                                    'Formula 1 login data cleared');
                               },
                               icon: const Icon(Icons.logout, size: 18),
                               label: const Text('Logout'),
                               style: OutlinedButton.styleFrom(
-                                padding: const EdgeInsets.symmetric(vertical: 12),
+                                padding:
+                                    const EdgeInsets.symmetric(vertical: 12),
                                 shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(8),
                                 ),
@@ -777,8 +812,8 @@ class _SettingsPageState extends State<SettingsPage> {
                       SizedBox(
                         width: double.infinity,
                         child: ElevatedButton.icon(
-                          onPressed: _isLoadingF1Data 
-                              ? null 
+                          onPressed: _isLoadingF1Data
+                              ? null
                               : () async {
                                   BuildContext? dialogContext;
                                   showDialog(
@@ -792,32 +827,38 @@ class _SettingsPageState extends State<SettingsPage> {
                                           children: [
                                             CircularProgressIndicator(),
                                             SizedBox(height: 16),
-                                            Text('Getting authentication token...'),
+                                            Text(
+                                                'Getting authentication token...'),
                                           ],
                                         ),
                                       );
                                     },
                                   );
-                                  
+
                                   setState(() {
                                     _isLoadingF1Data = true;
                                   });
-                                  
+
                                   try {
-                                    final token = await Formula1Service.getReese84Token(context);
-                    
-                                    if (dialogContext != null && Navigator.canPop(dialogContext!)) {
+                                    final token =
+                                        await Formula1Service.getReese84Token(
+                                            context);
+
+                                    if (dialogContext != null &&
+                                        Navigator.canPop(dialogContext!)) {
                                       Navigator.of(dialogContext!).pop();
                                     }
-                                    
+
                                     if (token != null) {
                                       _reese84Token = token;
                                       _showLoginDialog();
                                     } else {
-                                      _showErrorSnackBar('Failed to get authentication token');
+                                      _showErrorSnackBar(
+                                          'Failed to get authentication token');
                                     }
                                   } catch (e) {
-                                    if (dialogContext != null && Navigator.canPop(dialogContext!)) {
+                                    if (dialogContext != null &&
+                                        Navigator.canPop(dialogContext!)) {
                                       Navigator.of(dialogContext!).pop();
                                     }
                                     _showErrorSnackBar('Error: $e');
@@ -827,17 +868,20 @@ class _SettingsPageState extends State<SettingsPage> {
                                     });
                                   }
                                 },
-                          icon: _isLoadingF1Data 
+                          icon: _isLoadingF1Data
                               ? const SizedBox(
                                   width: 20,
                                   height: 20,
                                   child: CircularProgressIndicator(
                                     strokeWidth: 2,
-                                    valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                                    valueColor: AlwaysStoppedAnimation<Color>(
+                                        Colors.white),
                                   ),
                                 )
                               : const Icon(Icons.login, size: 20),
-                          label: Text(_isLoadingF1Data ? 'Loading...' : 'Login to F1TV'),
+                          label: Text(_isLoadingF1Data
+                              ? 'Loading...'
+                              : 'Login to F1TV'),
                           style: ElevatedButton.styleFrom(
                             backgroundColor: Theme.of(context).primaryColor,
                             foregroundColor: Colors.white,
@@ -853,9 +897,6 @@ class _SettingsPageState extends State<SettingsPage> {
                 ),
               ),
             ),
-            
-            
-
             const SizedBox(height: 24),
             Card(
               elevation: 2,
@@ -950,7 +991,8 @@ class _SettingsPageState extends State<SettingsPage> {
                       controller: _pathController,
                       decoration: InputDecoration(
                         labelText: 'Custom Download Path',
-                        hintText: 'Enter new download path, leave empty to use default',
+                        hintText:
+                            'Enter new download path, leave empty to use default',
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(8),
                         ),
@@ -995,7 +1037,6 @@ class _SettingsPageState extends State<SettingsPage> {
                 ),
               ),
             ),
-
             const SizedBox(height: 24),
             Card(
               elevation: 2,
@@ -1054,7 +1095,8 @@ class _SettingsPageState extends State<SettingsPage> {
                       enabled: _proxyEnabled,
                       decoration: InputDecoration(
                         labelText: 'Proxy URL',
-                        hintText: 'http://proxy.example.com:8080 or socks5://proxy.example.com:1080',
+                        hintText:
+                            'http://proxy.example.com:8080 or socks5://proxy.example.com:1080',
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(8),
                         ),
@@ -1075,7 +1117,8 @@ class _SettingsPageState extends State<SettingsPage> {
                         ),
                         child: Row(
                           children: [
-                            Icon(Icons.info_outline, size: 16, color: Colors.blue[700]),
+                            Icon(Icons.info_outline,
+                                size: 16, color: Colors.blue[700]),
                             const SizedBox(width: 8),
                             Expanded(
                               child: Text(
@@ -1128,8 +1171,6 @@ class _SettingsPageState extends State<SettingsPage> {
                 ),
               ),
             ),
-
-
             const SizedBox(height: 24),
             Card(
               elevation: 2,
@@ -1141,7 +1182,6 @@ class _SettingsPageState extends State<SettingsPage> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    
                     ListTile(
                       leading: const Icon(Icons.info_outline),
                       title: const Text('About'),
@@ -1152,20 +1192,23 @@ class _SettingsPageState extends State<SettingsPage> {
                           builder: (context) => AlertDialog(
                             title: const Text('About shiplus'),
                             content: const Column(
-                              mainAxisSize: MainAxisSize.min,
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text('Version: 1.1.0'),
-                                SizedBox(height: 8),
-                                SizedBox(
-                                  width: 400, // Fixed width in logical pixels
-                                  child: Text('This app is a free and open source project for downloading F1TV race replays.'),
-                                ),
-                                SizedBox(height: 8),
-                                SizedBox(
-                                  width: 400, // Fixed width in logical pixels
-                                  child: Text('This app is unofficial and is not associated in any way with the Formula 1 companies. F1, FORMULA ONE, FORMULA 1, FIA FORMULA ONE WORLD CHAMPIONSHIP, GRAND PRIX and related marks are trade marks of Formula One Licensing B.V.'),
-                                )]),
+                                mainAxisSize: MainAxisSize.min,
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text('Version: 1.1.1'),
+                                  SizedBox(height: 8),
+                                  SizedBox(
+                                    width: 400, // Fixed width in logical pixels
+                                    child: Text(
+                                        'This app is a free and open source project for downloading F1TV race replays.'),
+                                  ),
+                                  SizedBox(height: 8),
+                                  SizedBox(
+                                    width: 400, // Fixed width in logical pixels
+                                    child: Text(
+                                        'This app is unofficial and is not associated in any way with the Formula 1 companies. F1, FORMULA ONE, FORMULA 1, FIA FORMULA ONE WORLD CHAMPIONSHIP, GRAND PRIX and related marks are trade marks of Formula One Licensing B.V.'),
+                                  )
+                                ]),
                             actions: [
                               TextButton(
                                 onPressed: () => Navigator.of(context).pop(),
@@ -1183,7 +1226,8 @@ class _SettingsPageState extends State<SettingsPage> {
                       trailing: const Icon(Icons.chevron_right),
                       onTap: () {
                         try {
-                          final Uri url = Uri.parse('https://github.com/xayoung/shiplus');
+                          final Uri url =
+                              Uri.parse('https://github.com/xayoung/shiplus');
                           launchUrl(url, mode: LaunchMode.externalApplication);
                         } catch (e) {
                           print('无法打开URL: $e');
@@ -1205,100 +1249,106 @@ class _SettingsPageState extends State<SettingsPage> {
                                 mainAxisSize: MainAxisSize.min,
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  const Text('1. To use shiplus, you need an F1 TV subscription. Which one may depend on your specific needs, and availability in your country.'),
+                                  const Text(
+                                      '1. To use shiplus, you need an F1 TV subscription. Which one may depend on your specific needs, and availability in your country.'),
                                   const SizedBox(height: 4),
-                                  Row(
-                                    children: [
-                                      Text(
-                                          '2. See availability and exact delays.'),
-                                      const SizedBox(width: 10),
-                                      InkWell(
-                                        onTap: () {
-                                          try {
-                                            final Uri url = Uri.parse('https://support.formula1.com/s/article/2023-Location-Availability?language=en_US');
-                                            launchUrl(url, mode: LaunchMode.externalApplication);
-                                          } catch (e) {
-                                            print('无法打开URL: $e');
-                                          }
-                                        },
-                                        child: const Text(
-                                          'Click',
-                                          style: TextStyle(
-                                            color: Colors.blue,
-                                            decoration: TextDecoration.underline,
-                                          ),
+                                  Row(children: [
+                                    Text(
+                                        '2. See availability and exact delays.'),
+                                    const SizedBox(width: 10),
+                                    InkWell(
+                                      onTap: () {
+                                        try {
+                                          final Uri url = Uri.parse(
+                                              'https://support.formula1.com/s/article/2023-Location-Availability?language=en_US');
+                                          launchUrl(url,
+                                              mode: LaunchMode
+                                                  .externalApplication);
+                                        } catch (e) {
+                                          print('无法打开URL: $e');
+                                        }
+                                      },
+                                      child: const Text(
+                                        'Click',
+                                        style: TextStyle(
+                                          color: Colors.blue,
+                                          decoration: TextDecoration.underline,
                                         ),
                                       ),
-                                    ]
-                                  ),
+                                    ),
+                                  ]),
                                   const SizedBox(height: 4),
-                                  Row(
-                                    children: [
-                                      Text(
-                                          '3. Having trouble? Submit an issue on GitHub.'),
-                                      const SizedBox(width: 10),
-                                      InkWell(
-                                        onTap: () {
-                                          try {
-                                            final Uri url = Uri.parse('https://github.com/xayoung/shiplus/issues');
-                                            launchUrl(url, mode: LaunchMode.externalApplication);
-                                          } catch (e) {
-                                            print('无法打开URL: $e');
-                                          }
-                                        },
-                                        child: const Text(
-                                          'Click',
-                                          style: TextStyle(
-                                            color: Colors.blue,
-                                            decoration: TextDecoration.underline,
-                                          ),
+                                  Row(children: [
+                                    Text(
+                                        '3. Having trouble? Submit an issue on GitHub.'),
+                                    const SizedBox(width: 10),
+                                    InkWell(
+                                      onTap: () {
+                                        try {
+                                          final Uri url = Uri.parse(
+                                              'https://github.com/xayoung/shiplus/issues');
+                                          launchUrl(url,
+                                              mode: LaunchMode
+                                                  .externalApplication);
+                                        } catch (e) {
+                                          print('无法打开URL: $e');
+                                        }
+                                      },
+                                      child: const Text(
+                                        'Click',
+                                        style: TextStyle(
+                                          color: Colors.blue,
+                                          decoration: TextDecoration.underline,
                                         ),
                                       ),
-                                    ]
-                                  ),
+                                    ),
+                                  ]),
                                   const SizedBox(height: 4),
-                                  Row(
-                                    children: [
-                                      Text(
-                                          '4. Donate/Support this project.'),
-                                      const SizedBox(width: 10),
-                                      InkWell(
-                                        onTap: () {
-                                          try {
-                                            final Uri url = Uri.parse('https://github.com/sponsors/xayoung');
-                                            launchUrl(url, mode: LaunchMode.externalApplication);
-                                          } catch (e) {
-                                            print('无法打开URL: $e');
-                                          }
-                                        },
-                                        child: const Text(
-                                          'Github',
-                                          style: TextStyle(
-                                            color: Colors.blue,
-                                            decoration: TextDecoration.underline,
-                                          ),
+                                  Row(children: [
+                                    Text('4. Donate/Support this project.'),
+                                    const SizedBox(width: 10),
+                                    InkWell(
+                                      onTap: () {
+                                        try {
+                                          final Uri url = Uri.parse(
+                                              'https://github.com/sponsors/xayoung');
+                                          launchUrl(url,
+                                              mode: LaunchMode
+                                                  .externalApplication);
+                                        } catch (e) {
+                                          print('无法打开URL: $e');
+                                        }
+                                      },
+                                      child: const Text(
+                                        'Github',
+                                        style: TextStyle(
+                                          color: Colors.blue,
+                                          decoration: TextDecoration.underline,
                                         ),
                                       ),
-                                      const SizedBox(width: 5),
-                                      InkWell(
-                                        onTap: () {
-                                          try {
-                                            final Uri url = Uri.parse('https://ko-fi.com/xayoung');
-                                            launchUrl(url, mode: LaunchMode.externalApplication);
-                                          } catch (e) {
-                                            print('无法打开URL: $e');
-                                          }
-                                        },
-                                        child: const Text(
-                                          'Ko-fi',
-                                          style: TextStyle(
-                                            color: Colors.blue,
-                                            decoration: TextDecoration.underline,
-                                          ),
+                                    ),
+                                    const SizedBox(width: 5),
+                                    InkWell(
+                                      onTap: () {
+                                        try {
+                                          final Uri url = Uri.parse(
+                                              'https://ko-fi.com/xayoung');
+                                          launchUrl(url,
+                                              mode: LaunchMode
+                                                  .externalApplication);
+                                        } catch (e) {
+                                          print('无法打开URL: $e');
+                                        }
+                                      },
+                                      child: const Text(
+                                        'Ko-fi',
+                                        style: TextStyle(
+                                          color: Colors.blue,
+                                          decoration: TextDecoration.underline,
                                         ),
                                       ),
-                                    ]
-                                  )
+                                    ),
+                                  ])
                                 ],
                               ),
                             ),
