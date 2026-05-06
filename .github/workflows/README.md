@@ -102,12 +102,12 @@ Tests the build process on every push to main branches and pull requests.
 
 ### For macOS builds:
 - macOS runner (provided by GitHub)
-- Flutter SDK 3.24.0
+- Flutter SDK 3.27.1 (Dart SDK 3.6.0+)
 - Xcode (pre-installed on runner)
 
 ### For Windows builds:
 - Windows runner (provided by GitHub)
-- Flutter SDK 3.24.0
+- Flutter SDK 3.27.1 (Dart SDK 3.6.0+)
 - NSIS 3.09 (automatically installed)
 - Visual Studio build tools (pre-installed on runner)
 
@@ -138,8 +138,10 @@ Tests the build process on every push to main branches and pull requests.
 ### Change Flutter version
 Edit both workflow files:
 ```yaml
-flutter-version: '3.24.0'  # Change to desired version
+flutter-version: '3.27.1'  # Change to desired version
 ```
+
+**Note**: Ensure the Flutter version includes Dart SDK 3.6.0+ for compatibility with current dependencies (url_launcher 6.3.2 requires Dart SDK ^3.6.0).
 
 ### Modify NSIS installer
 Edit the NSIS script section in `build-release.yml`:
