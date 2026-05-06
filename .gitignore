@@ -48,3 +48,7 @@ app.*.map.json
 
 # FVM Version Cache
 .fvm/
+FINAL_SUMMARY.md
+GITHUB_ACTIONS_SUMMARY.md
+RELEASE_GUIDE.md
+WINDOWS_INSTALL_FIX.md

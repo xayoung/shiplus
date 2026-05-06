@@ -1230,7 +1230,7 @@ class _SettingsPageState extends State<SettingsPage> {
                               Uri.parse('https://github.com/xayoung/shiplus');
                           launchUrl(url, mode: LaunchMode.externalApplication);
                         } catch (e) {
-                          print('无法打开URL: $e');
+                          print('Unable to open URL: $e');
                         }
                       },
                     ),
@@ -1265,7 +1265,7 @@ class _SettingsPageState extends State<SettingsPage> {
                                               mode: LaunchMode
                                                   .externalApplication);
                                         } catch (e) {
-                                          print('无法打开URL: $e');
+                                          print('Unable to open URL: $e');
                                         }
                                       },
                                       child: const Text(
@@ -1291,7 +1291,7 @@ class _SettingsPageState extends State<SettingsPage> {
                                               mode: LaunchMode
                                                   .externalApplication);
                                         } catch (e) {
-                                          print('无法打开URL: $e');
+                                          print('Unable to open URL: $e');
                                         }
                                       },
                                       child: const Text(
@@ -1316,7 +1316,7 @@ class _SettingsPageState extends State<SettingsPage> {
                                               mode: LaunchMode
                                                   .externalApplication);
                                         } catch (e) {
-                                          print('无法打开URL: $e');
+                                          print('Unable to open URL: $e');
                                         }
                                       },
                                       child: const Text(
@@ -1337,7 +1337,7 @@ class _SettingsPageState extends State<SettingsPage> {
                                               mode: LaunchMode
                                                   .externalApplication);
                                         } catch (e) {
-                                          print('无法打开URL: $e');
+                                          print('Unable to open URL: $e');
                                         }
                                       },
                                       child: const Text(

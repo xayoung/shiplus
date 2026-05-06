@@ -4,9 +4,9 @@ import 'archive_page.dart';
 import 'download_manager_page.dart';
 import 'settings_page.dart';
 
-// 导航辅助类，用于在各个页面中进行导航操作
+// Navigation helper class for navigating between pages
 class NavigationHelper {
-  // Tab索引常量
+  // Tab index constants
   static const int homeTab = 0;
   static const int archiveTab = 1;
   static const int downloadTab = 2;
@@ -21,25 +21,25 @@ class NavigationHelper {
     return mainLayoutState?._navigatorKeys[tabIndex].currentState;
   }
 
-  // 获取当前选中的tab索引
+  // Get the currently selected tab index
   static int getCurrentTabIndex(BuildContext context) {
     final mainLayoutState = _getMainLayoutState(context);
     return mainLayoutState?.currentTabIndex ?? 0;
   }
 
-  // 在指定tab中推入新页面
+  // Push a new page in the specified tab
   static void pushPage(BuildContext context, int tabIndex, Widget page) {
     final navigator = getNavigatorState(context, tabIndex);
     navigator?.push(MaterialPageRoute(builder: (context) => page));
   }
 
-  // 在当前tab中推入新页面
+  // Push a new page in the current tab
   static void pushPageInCurrentTab(BuildContext context, Widget page) {
     final currentTab = getCurrentTabIndex(context);
     pushPage(context, currentTab, page);
   }
 
-  // 从指定tab中弹出页面
+  // Pop a page from the specified tab
   static void popPage(BuildContext context, int tabIndex) {
     final navigator = getNavigatorState(context, tabIndex);
     if (navigator?.canPop() == true) {
@@ -47,19 +47,19 @@ class NavigationHelper {
     }
   }
 
-  // 从当前tab中弹出页面
+  // Pop a page from the current tab
   static void popPageInCurrentTab(BuildContext context) {
     final currentTab = getCurrentTabIndex(context);
     popPage(context, currentTab);
   }
 
-  // 检查指定tab是否可以弹出页面
+  // Check if the specified tab can pop a page
   static bool canPop(BuildContext context, int tabIndex) {
     final navigator = getNavigatorState(context, tabIndex);
     return navigator?.canPop() ?? false;
   }
 
-  // 检查当前tab是否可以弹出页面
+  // Check if the current tab can pop a page
   static bool canPopInCurrentTab(BuildContext context) {
     final currentTab = getCurrentTabIndex(context);
     return canPop(context, currentTab);
@@ -79,7 +79,7 @@ class _MainLayoutState extends State<MainLayout> with TickerProviderStateMixin {
   AnimationController? _animationController;
   Animation<double>? _widthAnimation;
 
-  // 为每个页面创建独立的GlobalKey来保持Navigator状态
+  // Create independent GlobalKey for each page to maintain Navigator state
   final List<GlobalKey<NavigatorState>> _navigatorKeys = [
     GlobalKey<NavigatorState>(),
     GlobalKey<NavigatorState>(),
@@ -143,17 +143,17 @@ class _MainLayoutState extends State<MainLayout> with TickerProviderStateMixin {
     });
   }
 
-  // 获取当前选中的tab索引
+  // Get the currently selected tab index
   int get currentTabIndex => _selectedIndex;
 
-  // 处理返回键逻辑
+  // Handle back button logic
   Future<bool> _onWillPop() async {
     final navigator = _navigatorKeys[_selectedIndex].currentState;
     if (navigator?.canPop() == true) {
       navigator?.pop();
-      return false; // 不退出应用
+      return false; // Don't exit app
     }
-    return true; // 退出应用
+    return true; // Exit app
   }
 
   @override
@@ -163,7 +163,7 @@ class _MainLayoutState extends State<MainLayout> with TickerProviderStateMixin {
       child: Scaffold(
         body: Row(
           children: [
-            // 左侧导航栏
+            // Left sidebar
             AnimatedBuilder(
               animation: _widthAnimation ?? const AlwaysStoppedAnimation(200.0),
               builder: (context, child) {
@@ -173,7 +173,7 @@ class _MainLayoutState extends State<MainLayout> with TickerProviderStateMixin {
                   color: const Color(0xFF1E1E1E),
                   child: Column(
                     children: [
-                      // 顶部标题和折叠按钮
+                      // Top title and collapse button
                       Container(
                         padding: EdgeInsets.all(_isCollapsed ? 8 : 16),
                         child: _isCollapsed
@@ -230,7 +230,7 @@ class _MainLayoutState extends State<MainLayout> with TickerProviderStateMixin {
                         color: Color(0xFF333333),
                         height: 1,
                       ),
-                      // 导航项目
+                      // Navigation items
                       Expanded(
                         child: ListView.builder(
                           padding: const EdgeInsets.symmetric(vertical: 8),
@@ -303,7 +303,7 @@ class _MainLayoutState extends State<MainLayout> with TickerProviderStateMixin {
                               ),
                             );
 
-                            // 在折叠状态下添加工具提示
+                            // Add tooltip in collapsed state
                             if (_isCollapsed) {
                               return Tooltip(
                                 message: item.label,
@@ -321,7 +321,7 @@ class _MainLayoutState extends State<MainLayout> with TickerProviderStateMixin {
                 );
               },
             ),
-            // 右侧内容区域
+            // Right content area
             Expanded(
               child: Container(
                 color: const Color(0xFFF5F5F5),

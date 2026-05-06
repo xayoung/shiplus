@@ -4,7 +4,7 @@ import '../utils/dio_helper.dart';
 import 'weekend_page.dart';
 import 'main_layout.dart';
 
-// 数据模型类，参考 season_page.dart
+// Data model class, refer to season_page.dart
 class HomeItem {
   final String id;
   final Map<String, dynamic> metadata;
@@ -49,9 +49,9 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
-  // 滚动控制器
+  // Scroll controller
   final ScrollController _scrollController = ScrollController();
-  // 首页数据相关状态
+  // Home page data related state
   List<HomeItem> _verticalItems = [];
   List<HomeItem> _horizontalItems = [];
   String _horizontalTitle = 'Formula 1';
@@ -70,7 +70,7 @@ class _HomePageState extends State<HomePage> {
     super.dispose();
   }
 
-  // 获取首页数据，参考 season_page.dart 的实现
+  // Fetch home page data, refer to season_page.dart implementation
   Future<void> _fetchHomeData() async {
     try {
       setState(() {
@@ -91,22 +91,22 @@ class _HomePageState extends State<HomePage> {
       if (response.statusCode == 200) {
         final data = response.data;
 
-        // 分别处理两种布局类型的容器
+        // Process containers of two layout types separately
         List<HomeItem> verticalItems = [];
         List<HomeItem> horizontalItems = [];
-        String verticalTitle = '精选内容';
-        String horizontalTitle = '最新赛事';
+        String verticalTitle = 'Featured Content';
+        String horizontalTitle = 'Latest Events';
 
         if (data['resultObj']?['containers'] != null) {
           final containers = data['resultObj']['containers'] as List<dynamic>;
 
-          // 分别处理 vertical_simple_poster 和 horizontal_thumbnail
+          // Process vertical_simple_poster and horizontal_thumbnail separately
           for (final container in containers) {
             final layout = container['layout']?.toString() ?? '';
 
             if (layout == 'vertical_simple_poster' ||
                 layout == 'vertical_thumbnail') {
-              // 提取容器标题
+              // Extract container title
               final containerTitle = container['title']?.toString() ?? '';
 
               if (container['retrieveItems']?['resultObj']?['containers'] !=
@@ -117,7 +117,7 @@ class _HomePageState extends State<HomePage> {
                 for (final item in itemContainers) {
                   try {
                     final homeItem = HomeItem.fromJson(item);
-                    // 只添加有pageid的项目
+                    // Only add items with pageid
                     if (homeItem.pageid != null &&
                         homeItem.pageid!.isNotEmpty) {
                       if (layout == 'vertical_simple_poster') {
@@ -214,7 +214,7 @@ class _HomePageState extends State<HomePage> {
             const SizedBox(height: 16),
             ElevatedButton(
               onPressed: _fetchHomeData,
-              child: const Text('重试'),
+              child: const Text('Retry'),
             ),
           ],
         ),
@@ -226,7 +226,7 @@ class _HomePageState extends State<HomePage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // 页面标题
+          // Page title
           // const Text(
           //   '2025 Season',
           //   style: TextStyle(
@@ -237,19 +237,19 @@ class _HomePageState extends State<HomePage> {
           // ),
           // const SizedBox(height: 32),
 
-          // 内容列表
+          // Content list
           _buildItemsList(),
         ],
       ),
     );
   }
 
-  // 构建内容列表
+  // Build content list
   Widget _buildItemsList() {
     if (_verticalItems.isEmpty && _horizontalItems.isEmpty) {
       return const Center(
         child: Text(
-          '暂无内容',
+          'No content available',
           style: TextStyle(
             fontSize: 16,
             color: Colors.grey,
@@ -261,17 +261,17 @@ class _HomePageState extends State<HomePage> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // 垂直海报列表 (vertical_simple_poster)
+        // Vertical poster list (vertical_simple_poster)
         if (_verticalItems.isNotEmpty) ...[
           const SizedBox(height: 16),
           SizedBox(
-            height: 240, // 固定高度
+            height: 240, // Fixed height
             child: _buildScrollableRow(_verticalItems),
           ),
           const SizedBox(height: 32),
         ],
 
-        // 水平缩略图列表 (vertical_thumbnail)
+        // Horizontal thumbnail list (vertical_thumbnail)
         if (_horizontalItems.isNotEmpty) ...[
           Text(
             _horizontalTitle,
@@ -301,22 +301,22 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  // 构建带有左右滚动按钮的水平列表
+  // Build scrollable row with left/right scroll buttons
   Widget _buildScrollableRow(List<HomeItem> items) {
     if (items.isEmpty) {
       return const SizedBox.shrink();
     }
 
-    // 计算每次滚动的距离（一次滚动3个项目）
-    const itemWidth = 160.0; // 项目宽度
-    const itemSpacing = 12.0; // 项目间距
-    const scrollDistance = (itemWidth + itemSpacing) * 3; // 滚动3个项目的距离
+    // Calculate scroll distance per scroll (scroll 3 items at a time)
+    const itemWidth = 160.0; // Item width
+    const itemSpacing = 12.0; // Item spacing
+    const scrollDistance = (itemWidth + itemSpacing) * 3; // Distance to scroll 3 items
 
     return Stack(
       children: [
-        // 内容列表
+        // Content list
         Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 40), // 为按钮留出空间
+          padding: const EdgeInsets.symmetric(horizontal: 40), // Leave space for buttons
           child: ListView.builder(
             controller: _scrollController,
             scrollDirection: Axis.horizontal,
@@ -335,7 +335,7 @@ class _HomePageState extends State<HomePage> {
           ),
         ),
 
-        // 左滚动按钮
+        // Left scroll button
         Positioned(
           left: 0,
           top: 0,
@@ -349,7 +349,7 @@ class _HomePageState extends State<HomePage> {
               child: IconButton(
                 icon: const Icon(Icons.arrow_back_ios, color: Colors.white),
                 onPressed: () {
-                  // 向左滚动
+                  // Scroll left
                   final currentPosition = _scrollController.position.pixels;
                   final newPosition = (currentPosition - scrollDistance).clamp(
                     0.0,
@@ -366,7 +366,7 @@ class _HomePageState extends State<HomePage> {
           ),
         ),
 
-        // 右滚动按钮
+        // Right scroll button
         Positioned(
           right: 0,
           top: 0,
@@ -380,7 +380,7 @@ class _HomePageState extends State<HomePage> {
               child: IconButton(
                 icon: const Icon(Icons.arrow_forward_ios, color: Colors.white),
                 onPressed: () {
-                  // 向右滚动
+                  // Scroll right
                   final currentPosition = _scrollController.position.pixels;
                   final newPosition = (currentPosition + scrollDistance).clamp(
                     0.0,
@@ -400,15 +400,15 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  // 构建垂直海报项目
+  // Build vertical poster item
   Widget _buildVerticalItem(HomeItem item, int index) {
-    // 构建图片URL
+    // Build image URL
     final pictureUrl = item.metadata['pictureUrl']?.toString() ?? '';
     final imageUrl = pictureUrl.isNotEmpty
         ? 'https://f1tv.formula1.com/image-resizer/image/$pictureUrl?w=640&h=960&q=HI&o=L'
         : 'https://www.formula1.com/etc/designs/fom-website/images/f1-logo-red.png';
 
-    // 获取内容信息
+    // Get content information
     final title = item.metadata['title']?.toString() ?? 'Unknown Item';
     final description = item.metadata['longDescription']?.toString() ?? '';
 
@@ -498,15 +498,15 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  // 构建水平缩略图项目
+  // Build horizontal thumbnail item
   Widget _buildHorizontalItem(HomeItem item, int index) {
-    // 构建图片URL
+    // Build image URL
     final pictureUrl = item.metadata['pictureUrl']?.toString() ?? '';
     final imageUrl = pictureUrl.isNotEmpty
         ? 'https://f1tv.formula1.com/image-resizer/image/$pictureUrl?w=1024&h=576&q=HI&o=L'
         : 'https://www.formula1.com/etc/designs/fom-website/images/f1-logo-red.png';
 
-    // 获取内容信息
+    // Get content information
     final emfAttributes = item.metadata['emfAttributes'] ?? {};
     final meetingNumber = emfAttributes['Meeting_Number']?.toString() ?? '';
     final countryName =
@@ -523,7 +523,7 @@ class _HomePageState extends State<HomePage> {
         print('Home item selected: ${item.metadata['title']}');
         print('Item ID: ${item.id}');
         print('Page ID: ${item.pageid}');
-        // 使用NavigationHelper在当前tab中跳转到weekend页面
+        // Use NavigationHelper to navigate to weekend page in current tab
         if (item.pageid != null) {
           NavigationHelper.pushPageInCurrentTab(
             context,
@@ -576,7 +576,7 @@ class _HomePageState extends State<HomePage> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    // 标题行
+                    // Title row
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
@@ -603,7 +603,7 @@ class _HomePageState extends State<HomePage> {
                           ),
                       ],
                     ),
-                    // 副标题
+                    // Subtitle
                     Text(
                       globalTitle,
                       style: const TextStyle(

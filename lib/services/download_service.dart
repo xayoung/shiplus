@@ -3,69 +3,69 @@ import 'package:path_provider/path_provider.dart';
 import '../ffi/n_m3u8dl_re.dart';
 import '../models/download_progress.dart';
 
-/// 下载服务类，负责管理视频下载功能
+/// Download service class, responsible for managing video download functionality
 class DownloadService {
   static String? _customDownloadPath;
 
-  /// 获取下载路径
+  /// Get download path
   ///
-  /// 优先使用用户设置的自定义路径，如果没有设置或路径不可用，
-  /// 尝试使用系统的Downloads目录（macOS和Windows平台），
-  /// 如果不可用，则使用应用文档目录下的downloads文件夹
+  /// Priority: use user-set custom path if available,
+  /// try system Downloads directory (macOS and Windows),
+  /// fallback to application documents directory downloads folder
   static Future<String> getDownloadPath() async {
     try {
-      // 1. 首先尝试使用自定义路径
+      // 1. First try to use custom path
       if (_customDownloadPath != null && _customDownloadPath!.isNotEmpty) {
         final dir = Directory(_customDownloadPath!);
         await dir.create(recursive: true);
 
-        // 测试目录是否可写
+        // Test if directory is writable
         final testFile = File('${dir.path}/.write_test');
         try {
           await testFile.writeAsString('test');
           await testFile.delete();
-          print('使用自定义下载路径: ${_customDownloadPath!}');
+          print('Using custom download path: ${_customDownloadPath!}');
           return _customDownloadPath!;
         } catch (e) {
-          print('自定义路径不可写，回退到系统下载路径: $e');
+          print('Custom path not writable, fallback to system download path: $e');
         }
       }
 
-      // 2. 在macOS和Windows平台上，尝试使用系统的Downloads目录
+      // 2. On macOS and Windows, try to use system Downloads directory
       if (Platform.isMacOS || Platform.isWindows) {
         try {
           final downloadsDir = await getDownloadsDirectory();
           if (downloadsDir != null) {
-            // 测试目录是否可写
+            // Test if directory is writable
             final testFile = File('${downloadsDir.path}/.write_test');
             try {
               await testFile.writeAsString('test');
               await testFile.delete();
-              print('使用系统下载路径: ${downloadsDir.path}');
+              print('Using system download path: ${downloadsDir.path}');
               return downloadsDir.path;
             } catch (e) {
-              print('系统下载路径不可写，回退到应用文档目录: $e');
+              print('System download path not writable, fallback to app documents directory: $e');
             }
           } else {
-            print('系统下载路径不可用，回退到应用文档目录');
+            print('System download path not available, fallback to app documents directory');
           }
         } catch (e) {
-          print('获取系统下载路径失败，回退到应用文档目录: $e');
+          print('Failed to get system download path, fallback to app documents directory: $e');
         }
       } else {
-        print('当前平台不支持系统下载目录，使用应用文档目录');
+        print('Current platform does not support system download directory, using app documents directory');
       }
 
-      // 3. 使用应用文档目录下的downloads文件夹作为最后的回退方案
+      // 3. Use downloads folder in app documents directory as final fallback
       final directory = await getApplicationDocumentsDirectory();
       final downloadPath = '${directory.path}/downloads';
       final dir = Directory(downloadPath);
       await dir.create(recursive: true);
-      print('使用应用文档目录下载路径: $downloadPath');
+      print('Using app documents directory download path: $downloadPath');
       return downloadPath;
     } catch (e) {
-      print('获取下载路径失败: $e');
-      // 最后的回退方案
+      print('Failed to get download path: $e');
+      // Final fallback
       final directory = await getApplicationDocumentsDirectory();
       final downloadPath = '${directory.path}/downloads';
       final dir = Directory(downloadPath);
@@ -74,81 +74,81 @@ class DownloadService {
     }
   }
 
-  /// 设置自定义下载路径
+  /// Set custom download path
   static void setDownloadPath(String path) {
     _customDownloadPath = path.trim();
-    print('设置下载路径为: $_customDownloadPath');
+    print('Set download path to: $_customDownloadPath');
   }
 
-  /// 清除自定义下载路径，恢复使用默认路径
+  /// Clear custom download path, restore to default path
   static void clearCustomDownloadPath() {
     _customDownloadPath = null;
-    print('已清除自定义下载路径，将使用默认路径');
+    print('Cleared custom download path, will use default path');
   }
 
-  /// 下载视频
+  /// Download video
   ///
-  /// [url] M3U8视频链接
-  /// [fileName] 保存的文件名（不包含扩展名）
-  /// [audioLang] 音频语言选择，可选值: eng、deu、fra、spa、nld、por、fx、all
-  /// [extraArgs] 额外的N_m3u8DL-RE命令行参数
-  /// [onLog] 日志回调函数，用于实时接收下载日志
+  /// [url] M3U8 video link
+  /// [fileName] File name to save (without extension)
+  /// [audioLang] Audio language selection, options: eng, deu, fra, spa, nld, por, fx, all
+  /// [extraArgs] Additional N_m3u8DL-RE command line arguments
+  /// [onLog] Log callback function for real-time download logs
   ///
-  /// 抛出异常如果下载失败
+  /// Throws exception if download fails
   static Future<void> downloadVideo(
     String url,
-    String saveDir, // 修改参数顺序，添加saveDir参数
+    String saveDir, // Modified parameter order, added saveDir parameter
     String fileName, {
-    String? taskId, // 新增任务ID参数
-    String audioLang = '', // 音频语言选择，空字符串表示使用配置中的默认值
+    String? taskId, // New task ID parameter
+    String audioLang = '', // Audio language selection, empty string means use default from config
     List<String>? extraArgs,
     Function(String)? onLog,
-    Function(DownloadProgress)? onProgress, // 添加进度回调
+    Function(DownloadProgress)? onProgress, // Add progress callback
   }) async {
     if (url.trim().isEmpty) {
-      throw Exception('视频URL不能为空');
+      throw Exception('Video URL cannot be empty');
     }
 
     if (fileName.trim().isEmpty) {
-      throw Exception('文件名不能为空');
+      throw Exception('File name cannot be empty');
     }
 
-    // 清理文件名，移除不安全的字符
+    // Clean filename, remove unsafe characters
     final cleanFileName = _sanitizeFileName(fileName);
 
     try {
-      print('开始下载视频到: $saveDir');
+      print('Starting video download to: $saveDir');
 
-      onLog?.call('🚀 开始下载: $cleanFileName');
-      onLog?.call('📁 保存目录: $saveDir');
-      onLog?.call('🔗 视频链接: $url');
+      onLog?.call('🚀 Starting download: $cleanFileName');
+      onLog?.call('📁 Save directory: $saveDir');
+      onLog?.call('🔗 Video link: $url');
 
       final result = await N_m3u8DL_RE.downloadVideo(
         url,
         saveDir,
         cleanFileName,
-        taskId: taskId, // 传递任务ID
-        audioLang: audioLang, // 传递音频语言选择
+        taskId: taskId, // Pass task ID
+        audioLang: audioLang, // Pass audio language selection
         extraArgs: extraArgs,
         onLog: onLog,
-        onProgress: onProgress, // 传递进度回调
+        onProgress: onProgress, // Pass progress callback
       );
 
       if (result != 0) {
         throw Exception('ERROR: $result');
       }
 
-      // print('视频下载成功: $cleanFileName');
-      // onLog?.call('🎉 视频下载成功: $cleanFileName');
+      // print('Video download successful: $cleanFileName');
+      // onLog?.call('🎉 Video download successful: $cleanFileName');
     } catch (e) {
-      // print('下载视频时发生错误: $e');
+      // print('Error occurred while downloading video: $e');
       rethrow;
     }
   }
 
-  /// 清理文件名，移除不安全的字符
+  /// Clean filename, remove unsafe characters
   static String _sanitizeFileName(String fileName) {
-    // 移除或替换不安全的字符
+    // Remove or replace unsafe characters
     return fileName
         .replaceAll(RegExp(r'[<>:"/\\|?*]'), '_')
         .replaceAll(RegExp(r'\s+'), '_')

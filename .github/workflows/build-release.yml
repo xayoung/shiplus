@@ -1,0 +1,273 @@
+name: Build and Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version number (e.g., 1.0.0)'
+        required: true
+        default: '1.0.0'
+
+jobs:
+  build-macos:
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.24.0'
+          channel: 'stable'
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Build macOS app
+        run: flutter build macos --release
+
+      - name: Create DMG
+        run: |
+          # Install create-dmg if not available
+          brew install create-dmg || true
+
+          # Create DMG
+          APP_NAME="shiplus"
+          VERSION="${{ github.event.inputs.version || github.ref_name }}"
+          VERSION="${VERSION#v}"
+
+          create-dmg \
+            --volname "${APP_NAME}" \
+            --window-pos 200 120 \
+            --window-size 800 400 \
+            --icon-size 100 \
+            --icon "${APP_NAME}.app" 200 190 \
+            --hide-extension "${APP_NAME}.app" \
+            --app-drop-link 600 185 \
+            "${APP_NAME}-${VERSION}-macos.dmg" \
+            "build/macos/Build/Products/Release/${APP_NAME}.app" || \
+          # Fallback: create simple DMG if create-dmg fails
+          hdiutil create -volname "${APP_NAME}" -srcfolder "build/macos/Build/Products/Release/${APP_NAME}.app" -ov -format UDZO "${APP_NAME}-${VERSION}-macos.dmg"
+
+      - name: Upload macOS artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-dmg
+          path: '*.dmg'
+          retention-days: 7
+
+  build-windows:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.24.0'
+          channel: 'stable'
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Build Windows app
+        run: flutter build windows --release
+
+      - name: Get version
+        id: version
+        shell: pwsh
+        run: |
+          $version = "${{ github.event.inputs.version || github.ref_name }}"
+          $version = $version -replace '^v', ''
+          echo "VERSION=$version" >> $env:GITHUB_OUTPUT
+
+      - name: Create portable ZIP package
+        shell: pwsh
+        run: |
+          $version = "${{ steps.version.outputs.VERSION }}"
+          $appName = "shiplus"
+          $buildDir = "build\windows\x64\runner\Release"
+          $zipName = "${appName}-${version}-windows-portable.zip"
+
+          # Create portable package
+          Compress-Archive -Path "$buildDir\*" -DestinationPath $zipName
+
+          Write-Host "Created portable package: $zipName"
+
+      - name: Install NSIS
+        shell: pwsh
+        run: |
+          # Download and install NSIS
+          $nsisUrl = "https://sourceforge.net/projects/nsis/files/NSIS%203/3.09/nsis-3.09-setup.exe/download"
+          $nsisInstaller = "$env:TEMP\nsis-setup.exe"
+
+          Write-Host "Downloading NSIS..."
+          Invoke-WebRequest -Uri $nsisUrl -OutFile $nsisInstaller -UseBasicParsing
+
+          Write-Host "Installing NSIS..."
+          Start-Process -FilePath $nsisInstaller -ArgumentList "/S" -Wait
+
+          # Add NSIS to PATH
+          $nsisPath = "C:\Program Files (x86)\NSIS"
+          echo "$nsisPath" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+
+      - name: Create NSIS installer script
+        shell: pwsh
+        run: |
+          $version = "${{ steps.version.outputs.VERSION }}"
+          $nsisScript = @"
+          !define APP_NAME "ShiPlus"
+          !define APP_VERSION "$version"
+          !define APP_PUBLISHER "ShiPlus Team"
+          !define APP_EXE "shiplus.exe"
+          !define BUILD_DIR "build\windows\x64\runner\Release"
+
+          Name "`${APP_NAME}"
+          OutFile "shiplus-`${APP_VERSION}-windows-setup.exe"
+
+          ; Install to user's local AppData folder (no admin rights required)
+          InstallDir "`$LOCALAPPDATA\`${APP_NAME}"
+          InstallDirRegKey HKCU "Software\`${APP_NAME}" "Install_Dir"
+
+          ; User level installation (no admin required)
+          RequestExecutionLevel user
+
+          !include "MUI2.nsh"
+
+          !define MUI_ABORTWARNING
+          !define MUI_ICON "`${NSISDIR}\Contrib\Graphics\Icons\modern-install.ico"
+          !define MUI_UNICON "`${NSISDIR}\Contrib\Graphics\Icons\modern-uninstall.ico"
+
+          !insertmacro MUI_PAGE_WELCOME
+          !insertmacro MUI_PAGE_LICENSE "LICENSE.txt"
+          !insertmacro MUI_PAGE_DIRECTORY
+          !insertmacro MUI_PAGE_INSTFILES
+
+          ; Offer to launch the app after installation
+          !define MUI_FINISHPAGE_RUN "`$INSTDIR\`${APP_EXE}"
+          !define MUI_FINISHPAGE_RUN_TEXT "Launch `${APP_NAME}"
+          !insertmacro MUI_PAGE_FINISH
+
+          !insertmacro MUI_UNPAGE_CONFIRM
+          !insertmacro MUI_UNPAGE_INSTFILES
+
+          !insertmacro MUI_LANGUAGE "English"
+
+          Section "Install"
+            SetOutPath "`$INSTDIR"
+
+            ; Copy all files
+            File /r "`${BUILD_DIR}\*.*"
+
+            ; Write registry keys for current user
+            WriteRegStr HKCU "Software\`${APP_NAME}" "Install_Dir" "`$INSTDIR"
+            WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\`${APP_NAME}" "DisplayName" "`${APP_NAME}"
+            WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\`${APP_NAME}" "UninstallString" '"`$INSTDIR\uninstall.exe"'
+            WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\`${APP_NAME}" "DisplayVersion" "`${APP_VERSION}"
+            WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\`${APP_NAME}" "Publisher" "`${APP_PUBLISHER}"
+            WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\`${APP_NAME}" "DisplayIcon" "`$INSTDIR\`${APP_EXE}"
+            WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\`${APP_NAME}" "InstallLocation" "`$INSTDIR"
+            WriteRegDWORD HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\`${APP_NAME}" "NoModify" 1
+            WriteRegDWORD HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\`${APP_NAME}" "NoRepair" 1
+
+            ; Create uninstaller
+            WriteUninstaller "`$INSTDIR\uninstall.exe"
+
+            ; Create Start Menu shortcuts
+            CreateDirectory "`$SMPROGRAMS\`${APP_NAME}"
+            CreateShortcut "`$SMPROGRAMS\`${APP_NAME}\`${APP_NAME}.lnk" "`$INSTDIR\`${APP_EXE}" "" "`$INSTDIR\`${APP_EXE}" 0
+            CreateShortcut "`$SMPROGRAMS\`${APP_NAME}\Uninstall.lnk" "`$INSTDIR\uninstall.exe" "" "`$INSTDIR\uninstall.exe" 0
+
+            ; Create Desktop shortcut
+            CreateShortcut "`$DESKTOP\`${APP_NAME}.lnk" "`$INSTDIR\`${APP_EXE}" "" "`$INSTDIR\`${APP_EXE}" 0
+          SectionEnd
+
+          Section "Uninstall"
+            ; Remove registry keys
+            DeleteRegKey HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\`${APP_NAME}"
+            DeleteRegKey HKCU "Software\`${APP_NAME}"
+
+            ; Remove files and directories
+            RMDir /r "`$INSTDIR"
+
+            ; Remove shortcuts
+            Delete "`$SMPROGRAMS\`${APP_NAME}\*.*"
+            RMDir "`$SMPROGRAMS\`${APP_NAME}"
+            Delete "`$DESKTOP\`${APP_NAME}.lnk"
+          SectionEnd
+          "@
+
+          $nsisScript | Out-File -FilePath "installer.nsi" -Encoding utf8
+
+          Write-Host "NSIS script created (user-level installation)"
+
+      - name: Create LICENSE.txt for installer
+        shell: pwsh
+        run: |
+          if (Test-Path "LICENSE") {
+            Copy-Item "LICENSE" "LICENSE.txt"
+          } elseif (Test-Path "LICENSE.md") {
+            Copy-Item "LICENSE.md" "LICENSE.txt"
+          } else {
+            "MIT License" | Out-File -FilePath "LICENSE.txt" -Encoding utf8
+          }
+
+      - name: Build NSIS installer
+        shell: pwsh
+        run: |
+          $nsisPath = "C:\Program Files (x86)\NSIS\makensis.exe"
+
+          if (Test-Path $nsisPath) {
+            & $nsisPath installer.nsi
+          } else {
+            Write-Error "NSIS not found at $nsisPath"
+            exit 1
+          }
+
+      - name: Upload Windows portable artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-portable
+          path: '*-windows-portable.zip'
+          retention-days: 7
+
+      - name: Upload Windows installer artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-installer
+          path: '*-windows-setup.exe'
+          retention-days: 7
+
+  create-release:
+    needs: [build-macos, build-windows]
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/')
+
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Display structure of downloaded files
+        run: ls -R artifacts
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            artifacts/macos-dmg/*.dmg
+            artifacts/windows-portable/*.zip
+            artifacts/windows-installer/*.exe
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

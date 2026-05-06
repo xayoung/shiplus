@@ -3,10 +3,10 @@ import 'widgets/main_layout.dart';
 import 'services/formula1_service.dart';
 
 void main() async {
-  // 确保Flutter绑定初始化
+  // Ensure Flutter binding is initialized
   WidgetsFlutterBinding.ensureInitialized();
-  
-  // 初始化Formula1Service，从本地存储加载用户数据
+
+  // Initialize Formula1Service, load user data from local storage
   await Formula1Service.initialize();
   
   runApp(const MyApp());
@@ -18,7 +18,7 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'M3U8下载器',
+      title: 'M3U8 Downloader',
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),
         useMaterial3: true,

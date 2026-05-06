@@ -6,7 +6,7 @@ import 'season_page.dart';
 import 'main_layout.dart';
 import '../utils/dio_helper.dart';
 
-// 数据模型类
+// Data model class
 class ArchiveItem {
   final String id;
   final String title;
@@ -23,11 +23,11 @@ class ArchiveItem {
   });
 
   factory ArchiveItem.fromJson(Map<String, dynamic> json) {
-    // 从metadata中提取数据
+    // Extract data from metadata
     final metadata = json['metadata'] ?? {};
     final actions = json['actions'] as List<dynamic>? ?? [];
 
-    // 从actions中提取pageid
+    // Extract pageid from actions
     String pageid = '';
     if (actions.isNotEmpty) {
       final href = actions[0]['href']?.toString() ?? '';
@@ -85,13 +85,13 @@ class _ArchivePageState extends State<ArchivePage> {
       if (response.statusCode == 200) {
         final data = response.data;
 
-        // 按照React Native版本的逻辑解析数据
+        // Parse data according to React Native version logic
         List<ArchiveItem> seasonsArray = [];
 
         if (data['resultObj']?['containers'] != null) {
           final containers = data['resultObj']['containers'] as List<dynamic>;
 
-          // 遍历所有容器，查找包含retrieveItems的容器
+          // Iterate through all containers to find containers with retrieveItems
           for (int i = 0; i < containers.length; i++) {
             final container = containers[i];
 
@@ -100,7 +100,7 @@ class _ArchivePageState extends State<ArchivePage> {
               final itemContainers = container['retrieveItems']['resultObj']
                   ['containers'] as List<dynamic>;
 
-              // 将找到的items添加到seasonsArray中
+              // Add found items to seasonsArray
               for (final item in itemContainers) {
                 try {
                   seasonsArray.add(ArchiveItem.fromJson(item));
@@ -125,13 +125,13 @@ class _ArchivePageState extends State<ArchivePage> {
         }
       } else {
         setState(() {
-          _error = '请求失败: ${response.statusCode}';
+          _error = 'Request failed: ${response.statusCode}';
           _isLoading = false;
         });
       }
     } catch (e) {
       setState(() {
-        _error = '网络错误: $e';
+        _error = 'Network error: $e';
         _isLoading = false;
       });
       print('Error in _fetchData: $e');
@@ -147,7 +147,7 @@ class _ArchivePageState extends State<ArchivePage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // 页面标题
+            // Page title
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
@@ -162,13 +162,13 @@ class _ArchivePageState extends State<ArchivePage> {
                 IconButton(
                   onPressed: _fetchData,
                   icon: const Icon(Icons.refresh),
-                  tooltip: '刷新',
+                  tooltip: 'Refresh',
                 ),
               ],
             ),
             const SizedBox(height: 32),
 
-            // 内容区域
+            // Content area
             Expanded(
               child: _buildContent(),
             ),
@@ -186,7 +186,7 @@ class _ArchivePageState extends State<ArchivePage> {
           children: [
             CircularProgressIndicator(),
             SizedBox(height: 16),
-            Text('加载中...'),
+            Text('Loading...'),
           ],
         ),
       );

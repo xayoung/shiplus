@@ -72,8 +72,9 @@ If you find this project useful, please consider supporting its development:
 Your support helps maintain and improve this project!
 
 ### ❤️ TODO
-- [ ] Add support for iOS
-- [ ] Add support for Android
+- ~~Add support for iOS~~
+- ~~Add support for Android~~
+- [**try this app**](https://mvremote.xayoung.com/)
 
 ## 🚀 Development Getting Started
 
