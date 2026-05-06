@@ -11,6 +11,9 @@ on:
         required: true
         default: '1.0.0'
 
+permissions:
+  contents: write  # Allow creating releases and uploading artifacts
+
 jobs:
   build-macos:
     runs-on: macos-latest
