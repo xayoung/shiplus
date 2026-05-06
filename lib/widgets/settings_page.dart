@@ -1195,7 +1195,7 @@ class _SettingsPageState extends State<SettingsPage> {
                                 mainAxisSize: MainAxisSize.min,
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Text('Version: 1.1.1'),
+                                  Text('Version: 1.1.2'),
                                   SizedBox(height: 8),
                                   SizedBox(
                                     width: 400, // Fixed width in logical pixels
