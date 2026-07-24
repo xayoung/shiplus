@@ -68,7 +68,9 @@ jobs:
           retention-days: 7
 
   build-windows:
-    runs-on: windows-latest
+    # flutter_inappwebview_windows 0.6.0 still uses <experimental/coroutine>.
+    # windows-latest now carries VS 2026/MSVC 14.51, which rejects that header.
+    runs-on: windows-2022
 
     steps:
       - name: Checkout code

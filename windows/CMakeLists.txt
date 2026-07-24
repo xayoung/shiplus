@@ -30,7 +30,15 @@ set(CMAKE_C_FLAGS_PROFILE "${CMAKE_C_FLAGS_RELEASE}")
 set(CMAKE_CXX_FLAGS_PROFILE "${CMAKE_CXX_FLAGS_RELEASE}")
 
 # Use Unicode for all projects.
-add_definitions(-DUNICODE -D_UNICODE)
+#
+# flutter_inappwebview_windows 0.6.0 still uses C++/WinRT's
+# <experimental/coroutine> support. Recent MSVC toolchains turn its deprecation
+# into a hard error unless this compatibility definition is present.
+add_definitions(
+  -DUNICODE
+  -D_UNICODE
+  -D_SILENCE_EXPERIMENTAL_COROUTINE_DEPRECATION_WARNINGS
+)
 
 # Compilation settings that should be applied to most targets.
 #
