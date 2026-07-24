@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:dio/dio.dart';
+import 'package:shadcn_ui/shadcn_ui.dart';
 import '../utils/dio_helper.dart';
 import 'weekend_page.dart';
 import 'main_layout.dart';
+import 'ui/shiplus_ui.dart';
 
 // Data model class, refer to season_page.dart
 class HomeItem {
@@ -19,10 +21,9 @@ class HomeItem {
   });
 
   factory HomeItem.fromJson(Map<String, dynamic> json) {
-    final actions =
-        (json['actions'] as List<dynamic>?)?.cast<Map<String, dynamic>>();
+    final actions = (json['actions'] as List<dynamic>?)
+        ?.cast<Map<String, dynamic>>();
 
-    // 从actions中提取pageid
     String? pageid;
     if (actions != null && actions.isNotEmpty) {
       final href = actions[0]['href']?.toString() ?? '';
@@ -81,11 +82,7 @@ class _HomePageState extends State<HomePage> {
       final dio = await DioHelper.createDioWithCookies();
       final response = await dio.get(
         'https://f1tv.formula1.com/2.0/R/ENG/WEB_DASH/ALL/PAGE/12343/F1_TV_Pro_Annual/3',
-        options: Options(
-          headers: {
-            'Content-Type': 'application/json',
-          },
-        ),
+        options: Options(headers: {'Content-Type': 'application/json'}),
       );
 
       if (response.statusCode == 200) {
@@ -111,8 +108,9 @@ class _HomePageState extends State<HomePage> {
 
               if (container['retrieveItems']?['resultObj']?['containers'] !=
                   null) {
-                final itemContainers = container['retrieveItems']['resultObj']
-                    ['containers'] as List<dynamic>;
+                final itemContainers =
+                    container['retrieveItems']['resultObj']['containers']
+                        as List<dynamic>;
 
                 for (final item in itemContainers) {
                   try {
@@ -167,58 +165,16 @@ class _HomePageState extends State<HomePage> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.transparent,
-      body: _buildContent(),
-    );
+    return Scaffold(backgroundColor: Colors.transparent, body: _buildContent());
   }
 
   Widget _buildContent() {
     if (_isLoading) {
-      return const Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            CircularProgressIndicator(),
-            SizedBox(height: 16),
-            Text('Loading home data...'),
-          ],
-        ),
-      );
+      return const ShiplusLoadingState(label: 'Loading home data...');
     }
 
     if (_error != null) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Icon(
-              Icons.error_outline,
-              size: 64,
-              color: Colors.red,
-            ),
-            const SizedBox(height: 16),
-            const Text(
-              'Error',
-              style: TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              _error!,
-              textAlign: TextAlign.center,
-              style: const TextStyle(color: Colors.grey),
-            ),
-            const SizedBox(height: 16),
-            ElevatedButton(
-              onPressed: _fetchHomeData,
-              child: const Text('Retry'),
-            ),
-          ],
-        ),
-      );
+      return ShiplusErrorState(message: _error!, onRetry: _fetchHomeData);
     }
 
     return SingleChildScrollView(
@@ -226,6 +182,12 @@ class _HomePageState extends State<HomePage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          const ShiplusPageHeader(
+            title: 'Discover',
+            description: 'Browse Formula 1 seasons, weekends, and highlights.',
+            icon: LucideIcons.clapperboard,
+          ),
+          const SizedBox(height: 24),
           // Page title
           // const Text(
           //   '2025 Season',
@@ -250,10 +212,7 @@ class _HomePageState extends State<HomePage> {
       return const Center(
         child: Text(
           'No content available',
-          style: TextStyle(
-            fontSize: 16,
-            color: Colors.grey,
-          ),
+          style: TextStyle(fontSize: 16, color: Colors.grey),
         ),
       );
     }
@@ -310,13 +269,16 @@ class _HomePageState extends State<HomePage> {
     // Calculate scroll distance per scroll (scroll 3 items at a time)
     const itemWidth = 160.0; // Item width
     const itemSpacing = 12.0; // Item spacing
-    const scrollDistance = (itemWidth + itemSpacing) * 3; // Distance to scroll 3 items
+    const scrollDistance =
+        (itemWidth + itemSpacing) * 3; // Distance to scroll 3 items
 
     return Stack(
       children: [
         // Content list
         Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 40), // Leave space for buttons
+          padding: const EdgeInsets.symmetric(
+            horizontal: 40,
+          ), // Leave space for buttons
           child: ListView.builder(
             controller: _scrollController,
             scrollDirection: Axis.horizontal,
@@ -346,8 +308,8 @@ class _HomePageState extends State<HomePage> {
                 color: Colors.black.withOpacity(0.5),
                 shape: BoxShape.circle,
               ),
-              child: IconButton(
-                icon: const Icon(Icons.arrow_back_ios, color: Colors.white),
+              child: ShadIconButton.ghost(
+                icon: const Icon(LucideIcons.chevronLeft, color: Colors.white),
                 onPressed: () {
                   // Scroll left
                   final currentPosition = _scrollController.position.pixels;
@@ -377,8 +339,8 @@ class _HomePageState extends State<HomePage> {
                 color: Colors.black.withOpacity(0.5),
                 shape: BoxShape.circle,
               ),
-              child: IconButton(
-                icon: const Icon(Icons.arrow_forward_ios, color: Colors.white),
+              child: ShadIconButton.ghost(
+                icon: const Icon(LucideIcons.chevronRight, color: Colors.white),
                 onPressed: () {
                   // Scroll right
                   final currentPosition = _scrollController.position.pixels;
@@ -424,12 +386,9 @@ class _HomePageState extends State<HomePage> {
       },
       child: Container(
         clipBehavior: Clip.hardEdge,
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(8),
-        ),
+        decoration: BoxDecoration(borderRadius: BorderRadius.circular(8)),
         child: Stack(
           children: [
-            // 背景图片
             Positioned.fill(
               child: Image.network(
                 imageUrl,
@@ -445,7 +404,6 @@ class _HomePageState extends State<HomePage> {
                 },
               ),
             ),
-            // 底部覆盖层
             Positioned(
               bottom: 0,
               left: 0,
@@ -456,10 +414,7 @@ class _HomePageState extends State<HomePage> {
                   gradient: LinearGradient(
                     begin: Alignment.topCenter,
                     end: Alignment.bottomCenter,
-                    colors: [
-                      Colors.transparent,
-                      Colors.black87,
-                    ],
+                    colors: [Colors.transparent, Colors.black87],
                   ),
                 ),
                 child: Column(
@@ -511,10 +466,11 @@ class _HomePageState extends State<HomePage> {
     final meetingNumber = emfAttributes['Meeting_Number']?.toString() ?? '';
     final countryName =
         emfAttributes['Global_Meeting_Country_Name']?.toString() ??
-            item.metadata['title']?.toString() ??
-            'Unknown Item';
+        item.metadata['title']?.toString() ??
+        'Unknown Item';
     final displayDate = emfAttributes['Meeting_Display_Date']?.toString() ?? '';
-    final globalTitle = emfAttributes['Global_Title']?.toString() ??
+    final globalTitle =
+        emfAttributes['Global_Title']?.toString() ??
         item.metadata['longDescription']?.toString() ??
         'Unknown Item';
 
@@ -533,12 +489,9 @@ class _HomePageState extends State<HomePage> {
       },
       child: Container(
         clipBehavior: Clip.hardEdge,
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(8),
-        ),
+        decoration: BoxDecoration(borderRadius: BorderRadius.circular(8)),
         child: Stack(
           children: [
-            // 背景图片
             Positioned.fill(
               child: Image.network(
                 imageUrl,
@@ -555,7 +508,6 @@ class _HomePageState extends State<HomePage> {
                 },
               ),
             ),
-            // 底部覆盖层
             Positioned(
               bottom: 0,
               left: 0,
@@ -566,10 +518,7 @@ class _HomePageState extends State<HomePage> {
                   gradient: LinearGradient(
                     begin: Alignment.topCenter,
                     end: Alignment.bottomCenter,
-                    colors: [
-                      Colors.transparent,
-                      Colors.black87,
-                    ],
+                    colors: [Colors.transparent, Colors.black87],
                   ),
                 ),
                 child: Column(

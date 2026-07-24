@@ -1,14 +1,14 @@
 class DownloadProgress {
   final String type; // 'video', 'audio', 'muxing', 'cleaning', 'done'
-  final String quality; // '1920x1080' 或 'English | eng | 2CH'
-  final int currentSegment; // 当前片段 21
-  final int totalSegments; // 总片段 96
-  final double percentage; // 进度百分比 21.88
-  final String downloadedSize; // 已下载 201.03MB
-  final String totalSize; // 总大小 919.0MB
-  final String speed; // 下载速度 16.13MBps
-  final String eta; // 预计剩余时间 00:01:07
-  final String? message; // 额外信息，用于合并状态等
+  final String quality; // For example, '1920x1080' or 'English | eng | 2CH'.
+  final int currentSegment;
+  final int totalSegments;
+  final double percentage;
+  final String downloadedSize;
+  final String totalSize;
+  final String speed;
+  final String eta;
+  final String? message; // Additional information for post-processing states.
 
   DownloadProgress({
     required this.type,
@@ -23,7 +23,7 @@ class DownloadProgress {
     this.message,
   });
 
-  // 创建合并状态的进度
+  // Create a muxing progress state.
   factory DownloadProgress.muxing(String message) {
     return DownloadProgress(
       type: 'muxing',
@@ -39,7 +39,7 @@ class DownloadProgress {
     );
   }
 
-  // 创建清理状态的进度
+  // Create a cleanup progress state.
   factory DownloadProgress.cleaning() {
     return DownloadProgress(
       type: 'cleaning',
@@ -55,7 +55,7 @@ class DownloadProgress {
     );
   }
 
-  // 创建完成状态的进度
+  // Create a completed progress state.
   factory DownloadProgress.done(String fileName) {
     return DownloadProgress(
       type: 'done',

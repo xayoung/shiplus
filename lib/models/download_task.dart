@@ -1,13 +1,7 @@
-/// 下载任务状态枚举
-enum DownloadStatus {
-  pending, // 等待中
-  downloading, // 下载中
-  completed, // 已完成
-  failed, // 失败
-  cancelled, // 已取消
-}
+/// Download task states.
+enum DownloadStatus { pending, downloading, completed, failed, cancelled }
 
-/// 下载任务模型
+/// A download task.
 class DownloadTask {
   final String id;
   final String url;
@@ -31,7 +25,7 @@ class DownloadTask {
     this.completedAt,
   });
 
-  /// 复制并修改部分属性
+  /// Returns a copy with selected fields replaced.
   DownloadTask copyWith({
     String? id,
     String? url,
@@ -56,7 +50,7 @@ class DownloadTask {
     );
   }
 
-  /// 获取状态显示文本
+  /// Human-readable status text.
   String get statusText {
     switch (status) {
       case DownloadStatus.pending:
@@ -72,29 +66,29 @@ class DownloadTask {
     }
   }
 
-  /// 获取状态颜色
+  /// Status color.
   int get statusColor {
     switch (status) {
       case DownloadStatus.pending:
-        return 0xFF9E9E9E; // 灰色
+        return 0xFF9E9E9E; // Gray.
       case DownloadStatus.downloading:
-        return 0xFF2196F3; // 蓝色
+        return 0xFF2196F3; // Blue.
       case DownloadStatus.completed:
-        return 0xFF4CAF50; // 绿色
+        return 0xFF4CAF50; // Green.
       case DownloadStatus.failed:
-        return 0xFFF44336; // 红色
+        return 0xFFF44336; // Red.
       case DownloadStatus.cancelled:
-        return 0xFF9E9E9E; // 灰色
+        return 0xFF9E9E9E; // Gray.
     }
   }
 
-  /// 是否可以重试
+  /// Whether the task can be retried.
   bool get canRetry {
     return status == DownloadStatus.failed ||
         status == DownloadStatus.cancelled;
   }
 
-  /// 是否可以取消
+  /// Whether the task can be cancelled.
   bool get canCancel {
     return status == DownloadStatus.pending ||
         status == DownloadStatus.downloading;

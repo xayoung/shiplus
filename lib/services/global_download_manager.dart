@@ -6,7 +6,6 @@ import '../models/download_status_tracker.dart';
 import '../ffi/n_m3u8dl_re.dart';
 import 'download_service.dart';
 
-/// 全局下载管理器，管理所有下载任务
 class GlobalDownloadManager extends ChangeNotifier {
   static final GlobalDownloadManager _instance =
       GlobalDownloadManager._internal();
@@ -19,20 +18,16 @@ class GlobalDownloadManager extends ChangeNotifier {
       {};
   final Map<String, DownloadStatusTracker> _statusTrackers = {};
 
-  /// 获取所有下载任务
   List<DownloadTask> get downloadTasks => List.unmodifiable(_downloadTasks);
 
-  /// 获取正在下载的任务数量
   int get activeDownloadsCount => _downloadTasks
       .where((task) => task.status == DownloadStatus.downloading)
       .length;
 
-  /// 获取任务的状态跟踪器
   DownloadStatusTracker? getStatusTracker(String taskId) {
     return _statusTrackers[taskId];
   }
 
-  /// 添加下载任务
   Future<String> addDownloadTask({
     required String url,
     required String title,
@@ -58,46 +53,43 @@ class GlobalDownloadManager extends ChangeNotifier {
 
     notifyListeners();
 
-    // 立即开始下载
     _startDownload(taskId);
 
     return taskId;
   }
 
-  /// 开始下载任务
   Future<void> _startDownload(String taskId) async {
     final taskIndex = _downloadTasks.indexWhere((task) => task.id == taskId);
     if (taskIndex == -1) return;
 
     final task = _downloadTasks[taskIndex];
-    _downloadTasks[taskIndex] =
-        task.copyWith(status: DownloadStatus.downloading);
+    _downloadTasks[taskIndex] = task.copyWith(
+      status: DownloadStatus.downloading,
+    );
     notifyListeners();
 
     try {
       final downloadPath = await DownloadService.getDownloadPath();
 
-      _logControllers[taskId]?.add('🚀 开始下载: ${task.title}');
-      _logControllers[taskId]?.add('📁 保存目录: $downloadPath');
-      _logControllers[taskId]?.add('🔗 视频链接: ${task.url}');
+      _logControllers[taskId]?.add('🚀 Starting download: ${task.title}');
+      _logControllers[taskId]?.add('📁 Save directory: $downloadPath');
+      _logControllers[taskId]?.add('🔗 Video URL: ${task.url}');
 
       await DownloadService.downloadVideo(
         task.url,
         downloadPath,
         task.fileName,
-        taskId: taskId, // 传递任务ID
+        taskId: taskId,
         onLog: (log) {
           _logControllers[taskId]?.add(log);
         },
         onProgress: (progress) {
           _progressControllers[taskId]?.add(progress);
 
-          // 更新状态跟踪器
           final tracker = _statusTrackers[taskId];
           if (tracker != null) {
             tracker.updateProgress(progress);
 
-            // 更新任务进度
             final taskIndex = _downloadTasks.indexWhere((t) => t.id == taskId);
             if (taskIndex != -1) {
               _downloadTasks[taskIndex] = _downloadTasks[taskIndex].copyWith(
@@ -109,7 +101,6 @@ class GlobalDownloadManager extends ChangeNotifier {
         },
       );
 
-      // 下载完成
       final taskIndex = _downloadTasks.indexWhere((t) => t.id == taskId);
       if (taskIndex != -1) {
         _downloadTasks[taskIndex] = _downloadTasks[taskIndex].copyWith(
@@ -120,9 +111,8 @@ class GlobalDownloadManager extends ChangeNotifier {
         notifyListeners();
       }
 
-      _logControllers[taskId]?.add('🎉 下载完成: ${task.title}');
+      _logControllers[taskId]?.add('🎉 Download complete: ${task.title}');
     } catch (e) {
-      // 下载失败
       final taskIndex = _downloadTasks.indexWhere((t) => t.id == taskId);
       if (taskIndex != -1) {
         _downloadTasks[taskIndex] = _downloadTasks[taskIndex].copyWith(
@@ -132,30 +122,27 @@ class GlobalDownloadManager extends ChangeNotifier {
         notifyListeners();
       }
 
-      _logControllers[taskId]?.add('❌ 下载失败: ${e.toString()}');
+      _logControllers[taskId]?.add('❌ Download failed: ${e.toString()}');
     }
   }
 
-  /// 取消下载任务并删除
   void cancelDownload(String taskId) {
     final taskIndex = _downloadTasks.indexWhere((task) => task.id == taskId);
     if (taskIndex == -1) return;
 
-    // 尝试取消正在运行的进程
     final processKilled = N_m3u8DL_RE.cancelDownload(taskId);
 
-    // 记录取消日志
     if (processKilled) {
-      _logControllers[taskId]?.add('⏹️ 下载进程已中断，任务已删除');
+      _logControllers[taskId]?.add(
+        '⏹️ Download process stopped and task removed',
+      );
     } else {
-      _logControllers[taskId]?.add('⏹️ 下载已取消，任务已删除');
+      _logControllers[taskId]?.add('⏹️ Download cancelled and task removed');
     }
 
-    // 直接删除任务而不是更改状态
     removeDownloadTask(taskId);
   }
 
-  /// 重试下载任务
   void retryDownload(String taskId) {
     final taskIndex = _downloadTasks.indexWhere((task) => task.id == taskId);
     if (taskIndex == -1) return;
@@ -174,7 +161,6 @@ class GlobalDownloadManager extends ChangeNotifier {
     }
   }
 
-  /// 删除下载任务
   void removeDownloadTask(String taskId) {
     _downloadTasks.removeWhere((task) => task.id == taskId);
     _logControllers[taskId]?.close();
@@ -185,17 +171,14 @@ class GlobalDownloadManager extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// 获取任务的日志流
   Stream<String>? getLogStream(String taskId) {
     return _logControllers[taskId]?.stream;
   }
 
-  /// 获取任务的进度流
   Stream<DownloadProgress>? getProgressStream(String taskId) {
     return _progressControllers[taskId]?.stream;
   }
 
-  /// 清理文件名
   String _sanitizeFileName(String fileName) {
     return fileName
         .replaceAll(RegExp(r'[<>:"/\\|?*]'), '_')
@@ -203,13 +186,14 @@ class GlobalDownloadManager extends ChangeNotifier {
         .trim();
   }
 
-  /// 清空所有已完成的任务
   void clearCompletedTasks() {
     final completedTasks = _downloadTasks
-        .where((task) =>
-            task.status == DownloadStatus.completed ||
-            task.status == DownloadStatus.failed ||
-            task.status == DownloadStatus.cancelled)
+        .where(
+          (task) =>
+              task.status == DownloadStatus.completed ||
+              task.status == DownloadStatus.failed ||
+              task.status == DownloadStatus.cancelled,
+        )
         .toList();
 
     for (final task in completedTasks) {

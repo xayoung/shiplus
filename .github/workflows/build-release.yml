@@ -25,14 +25,17 @@ jobs:
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.35.1'
+          flutter-version: '3.44.8'
           channel: 'stable'
 
       - name: Install dependencies
         run: flutter pub get
 
       - name: Build macOS app
-        run: flutter build macos --release
+        run: |
+          VERSION="${{ github.event.inputs.version || github.ref_name }}"
+          VERSION="${VERSION#v}"
+          flutter build macos --release --build-name="$VERSION" --build-number="${{ github.run_number }}" --dart-define="SHIPLUS_VERSION=$VERSION"
 
       - name: Create DMG
         run: |
@@ -74,14 +77,18 @@ jobs:
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.35.1'
+          flutter-version: '3.44.8'
           channel: 'stable'
 
       - name: Install dependencies
         run: flutter pub get
 
       - name: Build Windows app
-        run: flutter build windows --release
+        shell: pwsh
+        run: |
+          $version = "${{ github.event.inputs.version || github.ref_name }}"
+          $version = $version -replace '^v', ''
+          flutter build windows --release --build-name="$version" --build-number="${{ github.run_number }}" --dart-define="SHIPLUS_VERSION=$version"
 
       - name: Get version
         id: version

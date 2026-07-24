@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:shadcn_ui/shadcn_ui.dart';
 import 'package:dio/dio.dart';
 import 'dart:io';
 import 'package:path/path.dart' as path;
@@ -53,7 +54,8 @@ class _PlayDetailPageState extends State<PlayDetailPage> {
           duration: const Duration(seconds: 2),
         ),
       );
-      final token = await Formula1Service.currentUserData!['data']['subscriptionToken'];
+      final token =
+          await Formula1Service.currentUserData!['data']['subscriptionToken'];
       await _fetchStreamData(playbackUrl, token, title);
     } catch (e) {
       // print('Token request exception: $e');
@@ -68,7 +70,10 @@ class _PlayDetailPageState extends State<PlayDetailPage> {
   }
 
   Future<void> _fetchStreamData(
-      String playbackUrl, String token, String title) async {
+    String playbackUrl,
+    String token,
+    String title,
+  ) async {
     try {
       final url =
           'https://f1tv.formula1.com/2.0/R/ENG/BIG_SCREEN_HLS/ALL/$playbackUrl&player=player_bm';
@@ -115,11 +120,12 @@ class _PlayDetailPageState extends State<PlayDetailPage> {
           final streamUrl = responseData['resultObj']?['url']?.toString();
           final laUrl = responseData['resultObj']?['laUrl']?.toString();
           if (streamUrl != null) {
-
-            if(laUrl != null) {
+            if (laUrl != null) {
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
-                  content: Text('The content is currently under DRM, please try again in a few hours'),
+                  content: Text(
+                    'The content is currently under DRM, please try again in a few hours',
+                  ),
                   duration: const Duration(seconds: 3),
                   backgroundColor: Colors.red,
                 ),
@@ -128,8 +134,6 @@ class _PlayDetailPageState extends State<PlayDetailPage> {
               // Request the m3u8 content first
               await _fetchAndParseM3u8Content(streamUrl, title);
             }
-            
-            
           } else {
             final msg = responseData['message']?.toString();
             ScaffoldMessenger.of(context).showSnackBar(
@@ -148,13 +152,15 @@ class _PlayDetailPageState extends State<PlayDetailPage> {
             ),
           );
         }
-      }  else {
+      } else {
         print('Streaming data request failed: ${response.statusCode}');
         print('Response: ${response.data}');
 
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Failed to get streaming data: ${response.statusCode}'),
+            content: Text(
+              'Failed to get streaming data: ${response.statusCode}',
+            ),
             duration: const Duration(seconds: 2),
           ),
         );
@@ -183,12 +189,11 @@ class _PlayDetailPageState extends State<PlayDetailPage> {
         print('Unknown error: $e');
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-              content: Text('Failed to get streaming data: $e'),
+            content: Text('Failed to get streaming data: $e'),
             duration: const Duration(seconds: 2),
           ),
         );
       }
-      
     }
   }
 
@@ -221,8 +226,8 @@ class _PlayDetailPageState extends State<PlayDetailPage> {
 
         setState(() {
           _metadata = data['resultObj']?['containers']?[0]?['metadata'];
-          _additionalStreams = data['resultObj']?['containers']?[0]?['metadata']
-              ?['additionalStreams'];
+          _additionalStreams =
+              data['resultObj']?['containers']?[0]?['metadata']?['additionalStreams'];
           _isLoading = false;
         });
 
@@ -253,7 +258,6 @@ class _PlayDetailPageState extends State<PlayDetailPage> {
   /// Download cover image
   Future<void> _downloadCover(String imageUrl, String title) async {
     try {
-      // 显示开始下载的提示
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Starting cover download...'),
@@ -351,7 +355,7 @@ class _PlayDetailPageState extends State<PlayDetailPage> {
         );
       },
     );
-    
+
     try {
       // Request the m3u8 content
       if (dio == null) {
@@ -359,23 +363,23 @@ class _PlayDetailPageState extends State<PlayDetailPage> {
       }
       final response = await dio!.get(
         streamUrl,
-        options: Options(
-          responseType: ResponseType.plain,
-        ),
+        options: Options(responseType: ResponseType.plain),
       );
-      
+
       // Close loading dialog
       if (mounted && dialogContext != null) {
         Navigator.pop(dialogContext!);
       }
-      
+
       if (response.statusCode == 200) {
         final m3u8Content = response.data.toString();
         _showDownloadOptionsDialog(m3u8Content, streamUrl, title);
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Failed to fetch stream options: ${response.statusCode}'),
+            content: Text(
+              'Failed to fetch stream options: ${response.statusCode}',
+            ),
             duration: const Duration(seconds: 3),
           ),
         );
@@ -385,7 +389,7 @@ class _PlayDetailPageState extends State<PlayDetailPage> {
       if (mounted && dialogContext != null) {
         Navigator.pop(dialogContext!);
       }
-      
+
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Error fetching stream options: $e'),
@@ -394,48 +398,64 @@ class _PlayDetailPageState extends State<PlayDetailPage> {
       );
     }
   }
-  
+
   /// Show download options dialog based on parsed M3U8 content
-  Future<void> _showDownloadOptionsDialog(String m3u8Content, String streamUrl, String title) async {
+  Future<void> _showDownloadOptionsDialog(
+    String m3u8Content,
+    String streamUrl,
+    String title,
+  ) async {
     // Parse the M3U8 content to extract video streams and audio tracks
     final parsedVideoStreams = _parseVideoStreams(m3u8Content);
     final parsedAudioTracks = _parseAudioTracks(m3u8Content);
     final subtitleTracks = _parseSubtitleTracks(m3u8Content);
-  
+
     bool hasHDRContent = _checkForHDRContent(m3u8Content);
-    final supportedResolutions = N_m3u8dlConfigService.getSupportedResolutionsTitle();
+    final supportedResolutions =
+        N_m3u8dlConfigService.getSupportedResolutionsTitle();
     final supportedRanges = N_m3u8dlConfigService.getSupportedRanges();
-    final supportedAudioLanguages = N_m3u8dlConfigService.getSupportedAudioLanguages();
+    final supportedAudioLanguages =
+        N_m3u8dlConfigService.getSupportedAudioLanguages();
     final supportedFormats = N_m3u8dlConfigService.getSupportedFormats();
-    final availableResolutions = _matchAvailableResolutions(parsedVideoStreams, supportedResolutions);
-    final availableAudioLanguages = _matchAvailableAudioLanguages(parsedAudioTracks, supportedAudioLanguages);
+    final availableResolutions = _matchAvailableResolutions(
+      parsedVideoStreams,
+      supportedResolutions,
+    );
+    final availableAudioLanguages = _matchAvailableAudioLanguages(
+      parsedAudioTracks,
+      supportedAudioLanguages,
+    );
     final availableRanges = _getAvailableRanges(supportedRanges, hasHDRContent);
-    
+
     // Load saved configuration
     final format = await N_m3u8dlConfigService.getFormat();
     final skipSub = await N_m3u8dlConfigService.getSkipSub();
     final resolution = await N_m3u8dlConfigService.getResolution();
     final audioLang = await N_m3u8dlConfigService.getAudioLang();
     final range = await N_m3u8dlConfigService.getRange();
-    
+
     // Selected options (initialized with saved configuration)
     String selectedResolution = resolution;
     String selectedAudioLang = audioLang;
     String selectedRange = range;
     bool skipSubtitles = skipSub;
     String selectedFormat = format;
-    if (!availableResolutions.any((item) => item['value'] == selectedResolution)) {
+    if (!availableResolutions.any(
+      (item) => item['value'] == selectedResolution,
+    )) {
       selectedResolution = availableResolutions.first['value']!;
     }
-    
-    if (!availableAudioLanguages.any((item) => item['value'] == selectedAudioLang)) {
+
+    if (!availableAudioLanguages.any(
+      (item) => item['value'] == selectedAudioLang,
+    )) {
       selectedAudioLang = availableAudioLanguages.first['value']!;
     }
-    
+
     if (!availableRanges.any((item) => item['value'] == selectedRange)) {
       selectedRange = availableRanges.first['value']!;
     }
-    
+
     showDialog(
       context: context,
       builder: (BuildContext context) {
@@ -473,10 +493,14 @@ class _PlayDetailPageState extends State<PlayDetailPage> {
                       child: DropdownButtonHideUnderline(
                         child: DropdownButton<String>(
                           value: selectedResolution,
-                          items: availableResolutions.map((res) => DropdownMenuItem(
-                            value: res['value'],
-                            child: Text(res['name']!),
-                          )).toList(),
+                          items: availableResolutions
+                              .map(
+                                (res) => DropdownMenuItem(
+                                  value: res['value'],
+                                  child: Text(res['name']!),
+                                ),
+                              )
+                              .toList(),
                           onChanged: (value) {
                             setState(() {
                               selectedResolution = value!;
@@ -487,7 +511,7 @@ class _PlayDetailPageState extends State<PlayDetailPage> {
                       ),
                     ),
                     const SizedBox(height: 20),
-                    
+
                     // Dynamic Range (only if HDR content is available)
                     if (availableRanges.length > 1) ...[
                       Text(
@@ -509,10 +533,14 @@ class _PlayDetailPageState extends State<PlayDetailPage> {
                         child: DropdownButtonHideUnderline(
                           child: DropdownButton<String>(
                             value: selectedRange,
-                            items: availableRanges.map((range) => DropdownMenuItem(
-                              value: range['value'],
-                              child: Text(range['name']!),
-                            )).toList(),
+                            items: availableRanges
+                                .map(
+                                  (range) => DropdownMenuItem(
+                                    value: range['value'],
+                                    child: Text(range['name']!),
+                                  ),
+                                )
+                                .toList(),
                             onChanged: (value) {
                               setState(() {
                                 selectedRange = value!;
@@ -524,7 +552,7 @@ class _PlayDetailPageState extends State<PlayDetailPage> {
                       ),
                       const SizedBox(height: 20),
                     ],
-                    
+
                     // Audio Language
                     Text(
                       'Audio Language',
@@ -545,10 +573,14 @@ class _PlayDetailPageState extends State<PlayDetailPage> {
                       child: DropdownButtonHideUnderline(
                         child: DropdownButton<String>(
                           value: selectedAudioLang,
-                          items: availableAudioLanguages.map((lang) => DropdownMenuItem(
-                            value: lang['value'],
-                            child: Text(lang['name']!),
-                          )).toList(),
+                          items: availableAudioLanguages
+                              .map(
+                                (lang) => DropdownMenuItem(
+                                  value: lang['value'],
+                                  child: Text(lang['name']!),
+                                ),
+                              )
+                              .toList(),
                           onChanged: (value) {
                             setState(() {
                               selectedAudioLang = value!;
@@ -559,7 +591,7 @@ class _PlayDetailPageState extends State<PlayDetailPage> {
                       ),
                     ),
                     const SizedBox(height: 16),
-                    
+
                     // Output Format
                     Text(
                       'Output Format',
@@ -580,10 +612,14 @@ class _PlayDetailPageState extends State<PlayDetailPage> {
                       child: DropdownButtonHideUnderline(
                         child: DropdownButton<String>(
                           value: selectedFormat,
-                          items: ['mp4', 'mkv'].map((format) => DropdownMenuItem(
-                            value: format,
-                            child: Text(format.toUpperCase())
-                          )).toList(),
+                          items: ['mp4', 'mkv']
+                              .map(
+                                (format) => DropdownMenuItem(
+                                  value: format,
+                                  child: Text(format.toUpperCase()),
+                                ),
+                              )
+                              .toList(),
                           onChanged: (value) {
                             setState(() {
                               selectedFormat = value!;
@@ -594,7 +630,7 @@ class _PlayDetailPageState extends State<PlayDetailPage> {
                       ),
                     ),
                     const SizedBox(height: 16),
-                    
+
                     // Skip Subtitles
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -622,7 +658,7 @@ class _PlayDetailPageState extends State<PlayDetailPage> {
                             ],
                           ),
                         ),
-                        Switch(
+                        ShadSwitch(
                           value: skipSubtitles,
                           onChanged: (value) {
                             setState(() {
@@ -632,7 +668,7 @@ class _PlayDetailPageState extends State<PlayDetailPage> {
                         ),
                       ],
                     ),
-                    
+
                     if (subtitleTracks.isNotEmpty && !skipSubtitles) ...[
                       const SizedBox(height: 16),
                       Text(
@@ -644,10 +680,14 @@ class _PlayDetailPageState extends State<PlayDetailPage> {
                         ),
                       ),
                       const SizedBox(height: 4),
-                      ...subtitleTracks.map((track) => Text(
-                        '• ${track['name']} (${track['language']})',
-                        style: TextStyle(fontSize: 12),
-                      )).toList(),
+                      ...subtitleTracks
+                          .map(
+                            (track) => Text(
+                              '• ${track['name']} (${track['language']})',
+                              style: TextStyle(fontSize: 12),
+                            ),
+                          )
+                          .toList(),
                     ],
                   ],
                 ),
@@ -662,18 +702,20 @@ class _PlayDetailPageState extends State<PlayDetailPage> {
                     // Save selected options to configuration service
                     await N_m3u8dlConfigService.setFormat(selectedFormat);
                     await N_m3u8dlConfigService.setSkipSub(skipSubtitles);
-                    await N_m3u8dlConfigService.setResolution(selectedResolution);
+                    await N_m3u8dlConfigService.setResolution(
+                      selectedResolution,
+                    );
                     await N_m3u8dlConfigService.setAudioLang(selectedAudioLang);
                     await N_m3u8dlConfigService.setRange(selectedRange);
-                    
+
                     Navigator.of(context).pop();
                     _startDownloadWithOptions(
-                      streamUrl, 
-                      title, 
-                      selectedResolution, 
-                      selectedAudioLang, 
+                      streamUrl,
+                      title,
+                      selectedResolution,
+                      selectedAudioLang,
                       skipSubtitles,
-                      selectedFormat
+                      selectedFormat,
                     );
                   },
                   child: const Text('Download'),
@@ -685,18 +727,18 @@ class _PlayDetailPageState extends State<PlayDetailPage> {
       },
     );
   }
-  
+
   bool _checkForHDRContent(String m3u8Content) {
-    return m3u8Content.contains('HLG') || 
-           m3u8Content.contains('HDR10') || 
-           m3u8Content.contains('DOLBY-VISION');
+    return m3u8Content.contains('HLG') ||
+        m3u8Content.contains('HDR10') ||
+        m3u8Content.contains('DOLBY-VISION');
   }
-  
+
   List<Map<String, String>> _matchAvailableResolutions(
-    List<Map<String, String>> parsedStreams, 
-    List<Map<String, String>> supportedResolutions
+    List<Map<String, String>> parsedStreams,
+    List<Map<String, String>> supportedResolutions,
   ) {
-    final result = [supportedResolutions.first]; 
+    final result = [supportedResolutions.first];
 
     final Set<int> availableWidths = {};
     for (final stream in parsedStreams) {
@@ -708,31 +750,33 @@ class _PlayDetailPageState extends State<PlayDetailPage> {
         }
       }
     }
-    
+
     // Match supported resolutions
-    for (final supported in supportedResolutions.skip(1)) { 
+    for (final supported in supportedResolutions.skip(1)) {
       final supportedWidth = int.tryParse(supported['value'] ?? '');
       if (supportedWidth != null) {
-        bool hasMatchingOrLarger = availableWidths.any((width) => 
-          width >= supportedWidth * 0.9 && width <= supportedWidth * 1.1);
-        
+        bool hasMatchingOrLarger = availableWidths.any(
+          (width) =>
+              width >= supportedWidth * 0.9 && width <= supportedWidth * 1.1,
+        );
+
         if (hasMatchingOrLarger) {
           result.add(supported);
         }
       }
     }
-    
+
     return result;
   }
-  
+
   List<Map<String, String>> _matchAvailableAudioLanguages(
-    List<Map<String, String>> parsedTracks, 
-    List<Map<String, String>> supportedLanguages
+    List<Map<String, String>> parsedTracks,
+    List<Map<String, String>> supportedLanguages,
   ) {
     if (parsedTracks.isEmpty) {
       return [supportedLanguages.firstWhere((lang) => lang['value'] == 'eng')];
     }
-    
+
     final Set<String> availableLanguages = {};
     for (final track in parsedTracks) {
       final language = track['language'];
@@ -745,34 +789,38 @@ class _PlayDetailPageState extends State<PlayDetailPage> {
     for (final supported in supportedLanguages) {
       final supportedCode = supported['value']?.toLowerCase();
       if (supportedCode == 'all') {
-
         result.add(supported);
-      } else if (supportedCode != null && availableLanguages.contains(supportedCode)) {
+      } else if (supportedCode != null &&
+          availableLanguages.contains(supportedCode)) {
         result.add(supported);
       }
     }
-    
+
     if (result.isEmpty || !result.any((lang) => lang['value'] != 'all')) {
-      result.insert(0, supportedLanguages.firstWhere((lang) => lang['value'] == 'eng'));
+      result.insert(
+        0,
+        supportedLanguages.firstWhere((lang) => lang['value'] == 'eng'),
+      );
     }
-    
+
     return result;
   }
 
   List<Map<String, String>> _getAvailableRanges(
-    List<Map<String, String>> supportedRanges, 
-    bool hasHDRContent
+    List<Map<String, String>> supportedRanges,
+    bool hasHDRContent,
   ) {
-
     final result = [
       supportedRanges.firstWhere((range) => range['value'] == 'auto'),
       supportedRanges.firstWhere((range) => range['value'] == 'SDR'),
     ];
 
     if (hasHDRContent) {
-      result.add(supportedRanges.firstWhere((range) => range['value'] == 'HLG'));
+      result.add(
+        supportedRanges.firstWhere((range) => range['value'] == 'HLG'),
+      );
     }
-    
+
     return result;
   }
 
@@ -780,20 +828,20 @@ class _PlayDetailPageState extends State<PlayDetailPage> {
   List<Map<String, String>> _parseVideoStreams(String m3u8Content) {
     final List<Map<String, String>> streams = [];
     final lines = m3u8Content.split('\n');
-    
+
     for (int i = 0; i < lines.length; i++) {
       if (lines[i].contains('#EXT-X-STREAM-INF:')) {
         final streamInfo = lines[i];
         String? resolution;
         String? bandwidth;
         String? codecs;
-        
+
         // Extract resolution
         final resMatch = RegExp(r'RESOLUTION=(\d+x\d+)').firstMatch(streamInfo);
         if (resMatch != null) {
           resolution = resMatch.group(1);
         }
-        
+
         // Extract bandwidth
         final bwMatch = RegExp(r'BANDWIDTH=(\d+)').firstMatch(streamInfo);
         if (bwMatch != null) {
@@ -804,13 +852,13 @@ class _PlayDetailPageState extends State<PlayDetailPage> {
             bandwidth = '${(bw / 1000).toStringAsFixed(0)} Kbps';
           }
         }
-        
+
         // Extract codecs
         final codecsMatch = RegExp(r'CODECS="([^"]+)"').firstMatch(streamInfo);
         if (codecsMatch != null) {
           codecs = codecsMatch.group(1);
         }
-        
+
         if (resolution != null && bandwidth != null && i + 1 < lines.length) {
           streams.add({
             'resolution': resolution,
@@ -821,122 +869,109 @@ class _PlayDetailPageState extends State<PlayDetailPage> {
         }
       }
     }
-    
+
     return streams;
   }
-  
+
   /// Parse audio tracks from M3U8 content
   List<Map<String, String>> _parseAudioTracks(String m3u8Content) {
     final List<Map<String, String>> tracks = [];
     final lines = m3u8Content.split('\n');
-    
+
     for (int i = 0; i < lines.length; i++) {
       if (lines[i].contains('#EXT-X-MEDIA:TYPE=AUDIO')) {
         final audioInfo = lines[i];
         String? name;
         String? language;
         String? uri;
-        
+
         // Extract name
         final nameMatch = RegExp(r'NAME="([^"]+)"').firstMatch(audioInfo);
         if (nameMatch != null) {
           name = nameMatch.group(1);
         }
-        
+
         // Extract language
         final langMatch = RegExp(r'LANGUAGE="([^"]+)"').firstMatch(audioInfo);
         if (langMatch != null) {
           language = langMatch.group(1);
         }
-        
+
         // Extract URI
         final uriMatch = RegExp(r'URI="([^"]+)"').firstMatch(audioInfo);
         if (uriMatch != null) {
           uri = uriMatch.group(1);
         }
-        
+
         if (name != null && language != null && uri != null) {
-          tracks.add({
-            'name': name,
-            'language': language,
-            'uri': uri,
-          });
+          tracks.add({'name': name, 'language': language, 'uri': uri});
         }
       }
     }
-    
+
     // If no audio tracks found, add a default one
     if (tracks.isEmpty) {
-      tracks.add({
-        'name': 'Default Audio',
-        'language': 'eng',
-        'uri': '',
-      });
+      tracks.add({'name': 'Default Audio', 'language': 'eng', 'uri': ''});
     }
-    
+
     return tracks;
   }
-  
+
   /// Parse subtitle tracks from M3U8 content
   List<Map<String, String>> _parseSubtitleTracks(String m3u8Content) {
     final List<Map<String, String>> tracks = [];
     final lines = m3u8Content.split('\n');
-    
+
     for (int i = 0; i < lines.length; i++) {
       if (lines[i].contains('#EXT-X-MEDIA:TYPE=SUBTITLES')) {
         final subInfo = lines[i];
         String? name;
         String? language;
         String? uri;
-        
+
         // Extract name
         final nameMatch = RegExp(r'NAME="([^"]+)"').firstMatch(subInfo);
         if (nameMatch != null) {
           name = nameMatch.group(1);
         }
-        
+
         // Extract language
         final langMatch = RegExp(r'LANGUAGE="([^"]+)"').firstMatch(subInfo);
         if (langMatch != null) {
           language = langMatch.group(1);
         }
-        
+
         // Extract URI
         final uriMatch = RegExp(r'URI="([^"]+)"').firstMatch(subInfo);
         if (uriMatch != null) {
           uri = uriMatch.group(1);
         }
-        
+
         if (name != null && language != null && uri != null) {
-          tracks.add({
-            'name': name,
-            'language': language,
-            'uri': uri,
-          });
+          tracks.add({'name': name, 'language': language, 'uri': uri});
         }
       }
     }
-    
+
     return tracks;
   }
-  
+
   /// Start download with selected options
   void _startDownloadWithOptions(
-    String streamUrl, 
-    String title, 
-    String resolution, 
-    String audioLang, 
+    String streamUrl,
+    String title,
+    String resolution,
+    String audioLang,
     bool skipSub,
-    String format
+    String format,
   ) async {
     try {
       // Prepare extra arguments based on selected options
       List<String> extraArgs = [];
-      
-      // 获取视频选择参数
+
       final range = await N_m3u8dlConfigService.getRange();
       String videoSelectParam;
-      
+
       if (range == 'auto') {
         if (resolution == 'best') {
           videoSelectParam = 'best';
@@ -950,30 +985,30 @@ class _PlayDetailPageState extends State<PlayDetailPage> {
           videoSelectParam = 'res="${resolution}*":range=$range:for=best';
         }
       }
-      
+
       // Add resolution and range selection
       if (videoSelectParam != 'best') {
         extraArgs.add('-sv');
         extraArgs.add(videoSelectParam);
       }
-      
+
       // Add audio language selection
       if (audioLang != 'eng') {
         extraArgs.add('-sa');
         extraArgs.add(audioLang);
       }
-      
+
       // Add format and subtitle options
       extraArgs.add('-M');
       extraArgs.add('format=$format:muxer=ffmpeg:skip_sub=$skipSub');
-      
+
       // Add to global download manager
       final downloadManager = GlobalDownloadManager();
       final taskId = await downloadManager.addDownloadTask(
         url: streamUrl,
         title: title,
       );
-      
+
       // Show download progress
       _showDownloadProgress(taskId, title);
     } catch (e) {
@@ -985,39 +1020,32 @@ class _PlayDetailPageState extends State<PlayDetailPage> {
       );
     }
   }
-  
+
   /// Show download progress
   void _showDownloadProgress(String taskId, String title) {
     final downloadManager = GlobalDownloadManager();
 
-    // 显示初始的 SnackBar
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text('Starting download: $title'),
-        duration: const Duration(seconds: 2)
+        duration: const Duration(seconds: 2),
       ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
+    final theme = ShadTheme.of(context);
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: theme.colorScheme.background,
       appBar: AppBar(
-        backgroundColor: Colors.white,
+        backgroundColor: theme.colorScheme.background,
         elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.black),
+        leading: ShadIconButton.ghost(
+          icon: const Icon(LucideIcons.arrowLeft, size: 18),
           onPressed: () => NavigationHelper.popPageInCurrentTab(context),
         ),
-        title: const Text(
-          'Play Detail',
-          style: TextStyle(
-            color: Colors.black,
-            fontSize: 20,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
+        title: Text('Play Detail', style: theme.textTheme.h4),
       ),
       body: _buildContent(),
     );
@@ -1042,18 +1070,11 @@ class _PlayDetailPageState extends State<PlayDetailPage> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Icon(
-              Icons.error_outline,
-              size: 64,
-              color: Colors.red,
-            ),
+            const Icon(Icons.error_outline, size: 64, color: Colors.red),
             const SizedBox(height: 16),
             const Text(
               'Error',
-              style: TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
-              ),
+              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 8),
             Text(
@@ -1102,9 +1123,7 @@ class _PlayDetailPageState extends State<PlayDetailPage> {
 
     return Card(
       elevation: 2,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-      ),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       child: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Column(
@@ -1163,10 +1182,7 @@ class _PlayDetailPageState extends State<PlayDetailPage> {
             // Title
             Text(
               title,
-              style: const TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
-              ),
+              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
             ),
 
             // Subtitle
@@ -1174,10 +1190,7 @@ class _PlayDetailPageState extends State<PlayDetailPage> {
               const SizedBox(height: 8),
               Text(
                 titleBrief,
-                style: TextStyle(
-                  fontSize: 16,
-                  color: Colors.grey[600],
-                ),
+                style: TextStyle(fontSize: 16, color: Colors.grey[600]),
               ),
             ],
 
@@ -1186,10 +1199,7 @@ class _PlayDetailPageState extends State<PlayDetailPage> {
               const SizedBox(height: 12),
               Text(
                 description,
-                style: const TextStyle(
-                  fontSize: 14,
-                  height: 1.4,
-                ),
+                style: const TextStyle(fontSize: 14, height: 1.4),
               ),
             ],
 
@@ -1236,9 +1246,7 @@ class _PlayDetailPageState extends State<PlayDetailPage> {
   Widget _buildAdditionalStreams() {
     return Card(
       elevation: 2,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-      ),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       child: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Column(
@@ -1254,10 +1262,7 @@ class _PlayDetailPageState extends State<PlayDetailPage> {
                 const SizedBox(width: 12),
                 const Text(
                   'Additional Streams',
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                  ),
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                 ),
               ],
             ),
@@ -1297,12 +1302,7 @@ class _PlayDetailPageState extends State<PlayDetailPage> {
           ),
         ),
       ),
-      title: Text(
-        title,
-        style: const TextStyle(
-          fontWeight: FontWeight.w500,
-        ),
-      ),
+      title: Text(title, style: const TextStyle(fontWeight: FontWeight.w500)),
       subtitle: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [

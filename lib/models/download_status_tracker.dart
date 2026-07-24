@@ -1,31 +1,31 @@
 import 'download_progress.dart';
 
-/// 下载状态跟踪器，用于管理 Vid、Aud 和 Sub 的分别进度
+/// Tracks the independent progress of video, audio, and subtitle streams.
 class DownloadStatusTracker {
   DownloadProgress? _videoProgress;
   final List<DownloadProgress> _audioProgresses = [];
   final List<DownloadProgress> _subtitleProgresses = [];
   DownloadProgress? _currentStatus;
 
-  // 获取视频进度
+  // Video progress.
   DownloadProgress? get videoProgress => _videoProgress;
 
-  // 获取音频进度列表
+  // Audio stream progress.
   List<DownloadProgress> get audioProgresses =>
       List.unmodifiable(_audioProgresses);
 
-  // 获取字幕进度列表
+  // Subtitle stream progress.
   List<DownloadProgress> get subtitleProgresses =>
       List.unmodifiable(_subtitleProgresses);
 
-  // 获取当前状态（合并、清理、完成等）
+  // Current post-processing state, such as muxing, cleanup, or completion.
   DownloadProgress? get currentStatus => _currentStatus;
 
-  // 为了向后兼容，保留单个音频进度的 getter
+  // Retained for backward compatibility.
   DownloadProgress? get audioProgress =>
       _audioProgresses.isNotEmpty ? _audioProgresses.first : null;
 
-  // 获取整体进度百分比（基于切片累加）
+  // Overall progress based on completed segments.
   double get overallProgress {
     if (_currentStatus?.type == 'done') {
       return 100.0;
@@ -33,10 +33,10 @@ class DownloadStatusTracker {
 
     if (_currentStatus?.type == 'muxing' ||
         _currentStatus?.type == 'cleaning') {
-      return 95.0; // 下载完成，正在后处理
+      return 95.0; // Download finished; post-processing is in progress.
     }
 
-    // 计算总的已完成切片和总切片数
+    // Sum completed and total segments across all streams.
     int totalCompletedSegments = 0;
     int totalSegments = 0;
 
@@ -45,13 +45,13 @@ class DownloadStatusTracker {
       totalSegments += _videoProgress!.totalSegments;
     }
 
-    // 添加所有音频进度
+    // Include every audio stream.
     for (final audioProgress in _audioProgresses) {
       totalCompletedSegments += audioProgress.currentSegment;
       totalSegments += audioProgress.totalSegments;
     }
 
-    // 添加所有字幕进度
+    // Include every subtitle stream.
     for (final subtitleProgress in _subtitleProgresses) {
       totalCompletedSegments += subtitleProgress.currentSegment;
       totalSegments += subtitleProgress.totalSegments;
@@ -64,16 +64,16 @@ class DownloadStatusTracker {
     return (totalCompletedSegments / totalSegments) * 100;
   }
 
-  // 获取状态描述
+  // Human-readable status description.
   String get statusDescription {
     if (_currentStatus != null) {
       switch (_currentStatus!.type) {
         case 'muxing':
-          return _currentStatus!.message ?? '正在合并...';
+          return _currentStatus!.message ?? 'Muxing...';
         case 'cleaning':
-          return '正在清理临时文件...';
+          return 'Cleaning temporary files...';
         case 'done':
-          return '下载完成';
+          return 'Download complete';
         default:
           return _currentStatus!.message ?? '';
       }
@@ -82,7 +82,9 @@ class DownloadStatusTracker {
     List<String> descriptions = [];
 
     if (_videoProgress != null) {
-      descriptions.add('视频: ${_videoProgress!.percentage.toStringAsFixed(1)}%');
+      descriptions.add(
+        'Video: ${_videoProgress!.percentage.toStringAsFixed(1)}%',
+      );
     }
 
     if (_audioProgresses.isNotEmpty) {
@@ -90,9 +92,10 @@ class DownloadStatusTracker {
       final avgAudioProgress = _audioProgresses.isEmpty
           ? 0.0
           : _audioProgresses.map((a) => a.percentage).reduce((a, b) => a + b) /
-              _audioProgresses.length;
-      descriptions
-          .add('音频($audioCount): ${avgAudioProgress.toStringAsFixed(1)}%');
+                _audioProgresses.length;
+      descriptions.add(
+        'Audio ($audioCount): ${avgAudioProgress.toStringAsFixed(1)}%',
+      );
     }
 
     if (_subtitleProgresses.isNotEmpty) {
@@ -100,29 +103,31 @@ class DownloadStatusTracker {
       final avgSubtitleProgress = _subtitleProgresses.isEmpty
           ? 0.0
           : _subtitleProgresses
-                  .map((s) => s.percentage)
-                  .reduce((a, b) => a + b) /
-              _subtitleProgresses.length;
+                    .map((s) => s.percentage)
+                    .reduce((a, b) => a + b) /
+                _subtitleProgresses.length;
       descriptions.add(
-          '字幕($subtitleCount): ${avgSubtitleProgress.toStringAsFixed(1)}%');
+        'Subtitles ($subtitleCount): '
+        '${avgSubtitleProgress.toStringAsFixed(1)}%',
+      );
     }
 
     if (descriptions.isEmpty) {
-      return '准备下载...';
+      return 'Preparing download...';
     }
 
     return descriptions.join(' | ');
   }
 
-  // 更新进度
+  // Update progress.
   void updateProgress(DownloadProgress progress) {
     switch (progress.type) {
       case 'video':
         _videoProgress = progress;
-        _currentStatus = null; // 清除状态，表示正在下载
+        _currentStatus = null; // Clear post-processing state while downloading.
         break;
       case 'audio':
-        // 查找是否已存在相同质量的音频进度
+        // Update the matching audio stream when it already exists.
         final existingIndex = _audioProgresses.indexWhere(
           (a) => a.quality == progress.quality,
         );
@@ -131,10 +136,10 @@ class DownloadStatusTracker {
         } else {
           _audioProgresses.add(progress);
         }
-        _currentStatus = null; // 清除状态，表示正在下载
+        _currentStatus = null; // Clear post-processing state while downloading.
         break;
       case 'subtitle':
-        // 查找是否已存在相同质量的字幕进度
+        // Update the matching subtitle stream when it already exists.
         final existingIndex = _subtitleProgresses.indexWhere(
           (s) => s.quality == progress.quality,
         );
@@ -143,7 +148,7 @@ class DownloadStatusTracker {
         } else {
           _subtitleProgresses.add(progress);
         }
-        _currentStatus = null; // 清除状态，表示正在下载
+        _currentStatus = null; // Clear post-processing state while downloading.
         break;
       case 'muxing':
       case 'cleaning':
@@ -153,7 +158,7 @@ class DownloadStatusTracker {
     }
   }
 
-  // 重置状态
+  // Reset all state.
   void reset() {
     _videoProgress = null;
     _audioProgresses.clear();
@@ -161,14 +166,14 @@ class DownloadStatusTracker {
     _currentStatus = null;
   }
 
-  // 检查是否完成
+  // Whether processing has completed.
   bool get isCompleted => _currentStatus?.type == 'done';
 
-  // 检查是否正在后处理
+  // Whether post-processing is in progress.
   bool get isPostProcessing =>
       _currentStatus?.type == 'muxing' || _currentStatus?.type == 'cleaning';
 
-  // 获取详细信息用于显示
+  // Detailed progress data for presentation.
   Map<String, dynamic> getDetailedInfo() {
     return {
       'video': _videoProgress != null
@@ -182,23 +187,27 @@ class DownloadStatusTracker {
             }
           : null,
       'audios': _audioProgresses
-          .map((audio) => {
-                'quality': audio.quality,
-                'progress': '${audio.currentSegment}/${audio.totalSegments}',
-                'percentage': audio.percentage,
-                'size': audio.downloadedSize,
-                'eta': audio.eta,
-              })
+          .map(
+            (audio) => {
+              'quality': audio.quality,
+              'progress': '${audio.currentSegment}/${audio.totalSegments}',
+              'percentage': audio.percentage,
+              'size': audio.downloadedSize,
+              'eta': audio.eta,
+            },
+          )
           .toList(),
       'subtitles': _subtitleProgresses
-          .map((subtitle) => {
-                'quality': subtitle.quality,
-                'progress':
-                    '${subtitle.currentSegment}/${subtitle.totalSegments}',
-                'percentage': subtitle.percentage,
-                'size': subtitle.downloadedSize,
-                'eta': subtitle.eta,
-              })
+          .map(
+            (subtitle) => {
+              'quality': subtitle.quality,
+              'progress':
+                  '${subtitle.currentSegment}/${subtitle.totalSegments}',
+              'percentage': subtitle.percentage,
+              'size': subtitle.downloadedSize,
+              'eta': subtitle.eta,
+            },
+          )
           .toList(),
       'status': _currentStatus?.message,
       'overall_progress': overallProgress,

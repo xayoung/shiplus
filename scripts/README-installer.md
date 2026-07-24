@@ -1,65 +1,58 @@
-# ShiPlus Windows 安装程序指南
+# ShiPlus Windows Installer Guide
 
-本文档提供了使用NSIS创建ShiPlus Windows安装程序的详细说明。
+This guide explains how to create the ShiPlus Windows installer with NSIS.
 
-## 前提条件
+## Prerequisites
 
-1. 安装Flutter SDK并配置Windows开发环境
-2. 安装NSIS (Nullsoft Scriptable Install System)
+1. Install the Flutter SDK and configure Windows desktop development.
+2. Install NSIS (Nullsoft Scriptable Install System).
 
-## 快速开始
+## Quick start
 
-### 一键构建（推荐）
-
-如果你想一次性完成所有步骤（构建Flutter应用并创建安装程序），请运行：
+To build the Flutter application, install NSIS when necessary, and create the
+installer in one step, run:
 
 ```batch
 scripts\build-installer.bat --build-app --install-nsis
 ```
 
-这个命令会：
-1. 如果需要，自动安装NSIS
-2. 构建Flutter Windows应用
-3. 创建NSIS安装程序
+## Build in separate steps
 
-### 分步构建
+Build the Flutter Windows application:
 
-如果你想分步骤进行：
+```batch
+scripts\build-installer.bat --build-app
+```
 
-1. **构建Flutter Windows应用**
-   ```batch
-   scripts\build-installer.bat --build-app
-   ```
+Create the installer from an existing Flutter release build:
 
-2. **创建NSIS安装程序**（假设Flutter应用已构建）
-   ```batch
-   scripts\build-installer.bat
-   ```
+```batch
+scripts\build-installer.bat
+```
 
-## 命令行参数
+## Options
 
-`build-installer.bat` 支持以下参数：
+- `--build-app`: Build the Flutter Windows application first.
+- `--install-nsis`: Install NSIS automatically when necessary.
+- `--help`: Show command-line help.
 
-- `--build-app`: 首先构建Flutter Windows应用
-- `--install-nsis`: 如果需要，自动安装NSIS
-- `--help`: 显示帮助信息
+## Files
 
-## 文件说明
+- `scripts/shiplus_installer.nsi`: NSIS installer definition.
+- `scripts/build-installer.bat`: Main installer build script.
+- `build/windows/installer/ShiPlus_Setup.exe`: Generated installer.
 
-- `scripts/shiplus_installer.nsi`: NSIS安装程序脚本
-- `scripts/build-installer.bat`: 主构建脚本
-- `build/windows/installer/ShiPlus_Setup.exe`: 生成的安装程序
+## Troubleshooting
 
-## 常见问题
+### NSIS is not found
 
-### 找不到NSIS
+Install NSIS or run the script with `--install-nsis`.
 
-确保NSIS已正确安装，或使用 `--install-nsis` 参数自动安装。
+### The build fails
 
-### 构建失败
+Confirm that the Flutter Windows release build succeeds and that
+`build\windows\x64\runner\Release` contains all required files.
 
-检查Flutter Windows应用是否已成功构建。确保 `build\windows\x64\runner\Release` 目录中包含所有必要的文件。
+### Customize the installer
 
-### 自定义安装程序
-
-如果需要自定义安装程序，可以编辑 `scripts\shiplus_installer.nsi` 文件。
+Edit `scripts\shiplus_installer.nsi`.

@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:dio/dio.dart';
+import 'package:shadcn_ui/shadcn_ui.dart';
 import 'play_detail_page.dart';
 import 'main_layout.dart';
 import '../utils/dio_helper.dart';
 
-// 数据模型类
 class WeekendItem {
   final String id;
   final Map<String, dynamic> metadata;
@@ -19,10 +19,9 @@ class WeekendItem {
   });
 
   factory WeekendItem.fromJson(Map<String, dynamic> json) {
-    final actions =
-        (json['actions'] as List<dynamic>?)?.cast<Map<String, dynamic>>();
+    final actions = (json['actions'] as List<dynamic>?)
+        ?.cast<Map<String, dynamic>>();
 
-    // 从actions中提取pageid
     String? pageid;
     if (actions != null && actions.isNotEmpty) {
       final href = actions[0]['href']?.toString() ?? '';
@@ -41,7 +40,6 @@ class WeekendItem {
   }
 }
 
-// 容器数据模型类
 class WeekendContainer {
   final String title;
   final String layout;
@@ -84,23 +82,17 @@ class _WeekendPageState extends State<WeekendPage> {
       final dio = await DioHelper.createDioWithCookies();
       final response = await dio.get(
         'https://f1tv.formula1.com/2.0/R/ENG/WEB_DASH/ALL/PAGE/${widget.pageid}/F1_TV_Pro_Annual/3',
-        options: Options(
-          headers: {
-            'Content-Type': 'application/json',
-          },
-        ),
+        options: Options(headers: {'Content-Type': 'application/json'}),
       );
 
       if (response.statusCode == 200) {
         final data = response.data;
 
-        // 处理所有容器，不进行过滤
         List<WeekendContainer> weekendContainers = [];
 
         if (data['resultObj']?['containers'] != null) {
           final containers = data['resultObj']['containers'] as List<dynamic>;
 
-          // 处理每个容器
           for (final container in containers) {
             final title = container['title']?.toString() ?? '';
             final layout = container['layout']?.toString() ?? '';
@@ -108,8 +100,9 @@ class _WeekendPageState extends State<WeekendPage> {
 
             if (container['retrieveItems']?['resultObj']?['containers'] !=
                 null) {
-              final itemContainers = container['retrieveItems']['resultObj']
-                  ['containers'] as List<dynamic>;
+              final itemContainers =
+                  container['retrieveItems']['resultObj']['containers']
+                      as List<dynamic>;
 
               for (final item in itemContainers) {
                 try {
@@ -120,13 +113,14 @@ class _WeekendPageState extends State<WeekendPage> {
               }
             }
 
-            // 只添加有内容的容器
             if (containerItems.isNotEmpty && title.isNotEmpty) {
-              weekendContainers.add(WeekendContainer(
-                title: title,
-                layout: layout,
-                items: containerItems,
-              ));
+              weekendContainers.add(
+                WeekendContainer(
+                  title: title,
+                  layout: layout,
+                  items: containerItems,
+                ),
+              );
             }
           }
         }
@@ -154,23 +148,17 @@ class _WeekendPageState extends State<WeekendPage> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = ShadTheme.of(context);
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: theme.colorScheme.background,
       appBar: AppBar(
-        backgroundColor: Colors.white,
+        backgroundColor: theme.colorScheme.background,
         elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.black),
+        leading: ShadIconButton.ghost(
+          icon: const Icon(LucideIcons.arrowLeft, size: 18),
           onPressed: () => NavigationHelper.popPageInCurrentTab(context),
         ),
-        title: const Text(
-          'Content',
-          style: TextStyle(
-            color: Colors.black,
-            fontSize: 20,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
+        title: Text('Content', style: theme.textTheme.h4),
       ),
       body: _buildContent(),
     );
@@ -195,18 +183,11 @@ class _WeekendPageState extends State<WeekendPage> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Icon(
-              Icons.error_outline,
-              size: 64,
-              color: Colors.red,
-            ),
+            const Icon(Icons.error_outline, size: 64, color: Colors.red),
             const SizedBox(height: 16),
             const Text(
               'Error',
-              style: TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
-              ),
+              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 8),
             Text(
@@ -223,10 +204,7 @@ class _WeekendPageState extends State<WeekendPage> {
       return const Center(
         child: Text(
           'No content to display',
-          style: TextStyle(
-            fontSize: 16,
-            color: Colors.grey,
-          ),
+          style: TextStyle(fontSize: 16, color: Colors.grey),
         ),
       );
     }
@@ -243,13 +221,13 @@ class _WeekendPageState extends State<WeekendPage> {
     );
   }
 
-  // 构建容器部分
   Widget _buildContainerSection(
-      WeekendContainer container, int containerIndex) {
+    WeekendContainer container,
+    int containerIndex,
+  ) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // 容器标题
         Padding(
           padding: const EdgeInsets.only(bottom: 16.0, top: 8.0),
           child: Text(
@@ -262,7 +240,6 @@ class _WeekendPageState extends State<WeekendPage> {
           ),
         ),
 
-        // 容器内容
         GridView.builder(
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
@@ -279,21 +256,17 @@ class _WeekendPageState extends State<WeekendPage> {
           },
         ),
 
-        // 容器之间的间隔
         const SizedBox(height: 32),
       ],
     );
   }
 
-  // 构建单个项目
   Widget _buildWeekendItem(WeekendItem item, int index) {
-    // 构建图片URL
     final pictureUrl = item.metadata['pictureUrl']?.toString() ?? '';
     final imageUrl = pictureUrl.isNotEmpty
         ? 'https://f1tv.formula1.com/image-resizer/image/$pictureUrl?w=1024&h=576&q=HI&o=L'
         : 'https://www.formula1.com/etc/designs/fom-website/images/f1-logo-red.png';
 
-    // 获取视频信息
     final shortDescription = item.metadata['title']?.toString() ?? '';
     final titleBrief = item.metadata['titleBrief']?.toString() ?? '';
 
@@ -311,12 +284,9 @@ class _WeekendPageState extends State<WeekendPage> {
       },
       child: Container(
         clipBehavior: Clip.hardEdge,
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(8),
-        ),
+        decoration: BoxDecoration(borderRadius: BorderRadius.circular(8)),
         child: Stack(
           children: [
-            // 背景图片
             Positioned.fill(
               child: Image.network(
                 imageUrl,
@@ -332,7 +302,6 @@ class _WeekendPageState extends State<WeekendPage> {
                 },
               ),
             ),
-            // 底部覆盖层
             Positioned(
               bottom: 0,
               left: 0,
@@ -343,17 +312,13 @@ class _WeekendPageState extends State<WeekendPage> {
                   gradient: LinearGradient(
                     begin: Alignment.topCenter,
                     end: Alignment.bottomCenter,
-                    colors: [
-                      Colors.transparent,
-                      Colors.black87,
-                    ],
+                    colors: [Colors.transparent, Colors.black87],
                   ),
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    // 标题
                     Text(
                       shortDescription,
                       style: const TextStyle(

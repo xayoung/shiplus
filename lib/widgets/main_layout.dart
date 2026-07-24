@@ -1,68 +1,55 @@
 import 'package:flutter/material.dart';
-import 'home_page.dart';
+import 'package:shadcn_ui/shadcn_ui.dart';
+
 import 'archive_page.dart';
 import 'download_manager_page.dart';
+import 'home_page.dart';
 import 'settings_page.dart';
 
-// Navigation helper class for navigating between pages
 class NavigationHelper {
-  // Tab index constants
   static const int homeTab = 0;
   static const int archiveTab = 1;
   static const int downloadTab = 2;
   static const int settingsTab = 3;
 
-  static _MainLayoutState? _getMainLayoutState(BuildContext context) {
+  static _MainLayoutState? _state(BuildContext context) {
     return context.findAncestorStateOfType<_MainLayoutState>();
   }
 
   static NavigatorState? getNavigatorState(BuildContext context, int tabIndex) {
-    final mainLayoutState = _getMainLayoutState(context);
-    return mainLayoutState?._navigatorKeys[tabIndex].currentState;
+    return _state(context)?._navigatorKeys[tabIndex].currentState;
   }
 
-  // Get the currently selected tab index
   static int getCurrentTabIndex(BuildContext context) {
-    final mainLayoutState = _getMainLayoutState(context);
-    return mainLayoutState?.currentTabIndex ?? 0;
+    return _state(context)?.currentTabIndex ?? homeTab;
   }
 
-  // Push a new page in the specified tab
   static void pushPage(BuildContext context, int tabIndex, Widget page) {
-    final navigator = getNavigatorState(context, tabIndex);
-    navigator?.push(MaterialPageRoute(builder: (context) => page));
+    getNavigatorState(
+      context,
+      tabIndex,
+    )?.push(MaterialPageRoute<void>(builder: (_) => page));
   }
 
-  // Push a new page in the current tab
   static void pushPageInCurrentTab(BuildContext context, Widget page) {
-    final currentTab = getCurrentTabIndex(context);
-    pushPage(context, currentTab, page);
+    pushPage(context, getCurrentTabIndex(context), page);
   }
 
-  // Pop a page from the specified tab
   static void popPage(BuildContext context, int tabIndex) {
     final navigator = getNavigatorState(context, tabIndex);
-    if (navigator?.canPop() == true) {
-      navigator?.pop();
-    }
+    if (navigator?.canPop() ?? false) navigator?.pop();
   }
 
-  // Pop a page from the current tab
   static void popPageInCurrentTab(BuildContext context) {
-    final currentTab = getCurrentTabIndex(context);
-    popPage(context, currentTab);
+    popPage(context, getCurrentTabIndex(context));
   }
 
-  // Check if the specified tab can pop a page
   static bool canPop(BuildContext context, int tabIndex) {
-    final navigator = getNavigatorState(context, tabIndex);
-    return navigator?.canPop() ?? false;
+    return getNavigatorState(context, tabIndex)?.canPop() ?? false;
   }
 
-  // Check if the current tab can pop a page
   static bool canPopInCurrentTab(BuildContext context) {
-    final currentTab = getCurrentTabIndex(context);
-    return canPop(context, currentTab);
+    return canPop(context, getCurrentTabIndex(context));
   }
 }
 
@@ -73,274 +60,150 @@ class MainLayout extends StatefulWidget {
   State<MainLayout> createState() => _MainLayoutState();
 }
 
-class _MainLayoutState extends State<MainLayout> with TickerProviderStateMixin {
+class _MainLayoutState extends State<MainLayout> {
+  static const double _expandedWidth = 224;
+  static const double _collapsedWidth = 72;
+
   int _selectedIndex = 0;
   bool _isCollapsed = false;
-  AnimationController? _animationController;
-  Animation<double>? _widthAnimation;
 
-  // Create independent GlobalKey for each page to maintain Navigator state
-  final List<GlobalKey<NavigatorState>> _navigatorKeys = [
-    GlobalKey<NavigatorState>(),
-    GlobalKey<NavigatorState>(),
-    GlobalKey<NavigatorState>(),
-    GlobalKey<NavigatorState>(),
-  ];
+  final List<GlobalKey<NavigatorState>> _navigatorKeys = List.generate(
+    4,
+    (_) => GlobalKey<NavigatorState>(),
+  );
 
-  final List<NavigationItem> _navigationItems = [
+  late final List<NavigationItem> _navigationItems = const [
+    NavigationItem(icon: LucideIcons.house, label: 'Home', page: HomePage()),
     NavigationItem(
-      icon: Icons.home,
-      label: 'Home',
-      page: const HomePage(),
-    ),
-    NavigationItem(
-      icon: Icons.archive,
+      icon: LucideIcons.archive,
       label: 'Archive',
-      page: const ArchivePage(),
+      page: ArchivePage(),
     ),
     NavigationItem(
-      icon: Icons.download,
-      label: 'Download',
-      page: const DownloadManagerPage(),
+      icon: LucideIcons.download,
+      label: 'Downloads',
+      page: DownloadManagerPage(),
     ),
     NavigationItem(
-      icon: Icons.settings,
+      icon: LucideIcons.settings,
       label: 'Settings',
-      page: const SettingsPage(),
+      page: SettingsPage(),
     ),
   ];
 
-  @override
-  void initState() {
-    super.initState();
-    _animationController = AnimationController(
-      duration: const Duration(milliseconds: 300),
-      vsync: this,
-    );
-    _widthAnimation = Tween<double>(
-      begin: 200.0,
-      end: 60.0,
-    ).animate(CurvedAnimation(
-      parent: _animationController!,
-      curve: Curves.easeInOut,
-    ));
-  }
-
-  @override
-  void dispose() {
-    _animationController?.dispose();
-    super.dispose();
-  }
-
-  void _toggleSidebar() {
-    setState(() {
-      _isCollapsed = !_isCollapsed;
-      if (_isCollapsed) {
-        _animationController?.forward();
-      } else {
-        _animationController?.reverse();
-      }
-    });
-  }
-
-  // Get the currently selected tab index
   int get currentTabIndex => _selectedIndex;
 
-  // Handle back button logic
-  Future<bool> _onWillPop() async {
-    final navigator = _navigatorKeys[_selectedIndex].currentState;
-    if (navigator?.canPop() == true) {
-      navigator?.pop();
-      return false; // Don't exit app
+  void _selectTab(int index) {
+    if (_selectedIndex == index) {
+      final navigator = _navigatorKeys[index].currentState;
+      navigator?.popUntil((route) => route.isFirst);
+      return;
     }
-    return true; // Exit app
+    setState(() => _selectedIndex = index);
+  }
+
+  void _handleBack(bool didPop) {
+    if (didPop) return;
+    final navigator = _navigatorKeys[_selectedIndex].currentState;
+    if (navigator?.canPop() ?? false) navigator?.pop();
   }
 
   @override
   Widget build(BuildContext context) {
-    return WillPopScope(
-      onWillPop: _onWillPop,
+    final theme = ShadTheme.of(context);
+    final isCompact = MediaQuery.sizeOf(context).width < 760;
+
+    return PopScope<void>(
+      canPop: !(_navigatorKeys[_selectedIndex].currentState?.canPop() ?? false),
+      onPopInvokedWithResult: (didPop, _) => _handleBack(didPop),
       child: Scaffold(
+        backgroundColor: theme.colorScheme.background,
         body: Row(
           children: [
-            // Left sidebar
-            AnimatedBuilder(
-              animation: _widthAnimation ?? const AlwaysStoppedAnimation(200.0),
-              builder: (context, child) {
-                return Container(
-                  width:
-                      _widthAnimation?.value ?? (_isCollapsed ? 60.0 : 200.0),
-                  color: const Color(0xFF1E1E1E),
-                  child: Column(
-                    children: [
-                      // Top title and collapse button
-                      Container(
-                        padding: EdgeInsets.all(_isCollapsed ? 8 : 16),
-                        child: _isCollapsed
-                            ? Center(
-                                child: IconButton(
-                                  icon: const Icon(
-                                    Icons.menu,
-                                    color: Colors.white,
-                                    size: 20,
-                                  ),
-                                  onPressed: _toggleSidebar,
-                                  padding: EdgeInsets.zero,
-                                  constraints: const BoxConstraints(
-                                    minWidth: 24,
-                                    minHeight: 24,
-                                  ),
-                                ),
-                              )
-                            : Row(
-                                children: [
-                                  const Icon(
-                                    Icons.dashboard,
-                                    color: Colors.white,
-                                    size: 24,
-                                  ),
-                                  const SizedBox(width: 12),
-                                  const Expanded(
-                                    child: Text(
-                                      'shiplus',
-                                      style: TextStyle(
-                                        color: Colors.white,
-                                        fontSize: 16,
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    ),
-                                  ),
-                                  IconButton(
-                                    icon: const Icon(
-                                      Icons.menu_open,
-                                      color: Colors.white,
-                                      size: 20,
-                                    ),
-                                    onPressed: _toggleSidebar,
-                                    padding: EdgeInsets.zero,
-                                    constraints: const BoxConstraints(
-                                      minWidth: 24,
-                                      minHeight: 24,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                      ),
-                      const Divider(
-                        color: Color(0xFF333333),
-                        height: 1,
-                      ),
-                      // Navigation items
-                      Expanded(
-                        child: ListView.builder(
-                          padding: const EdgeInsets.symmetric(vertical: 8),
-                          itemCount: _navigationItems.length,
-                          itemBuilder: (context, index) {
-                            final item = _navigationItems[index];
-                            final isSelected = _selectedIndex == index;
+            if (!isCompact) _buildSidebar(theme),
+            Expanded(child: _buildContent(theme)),
+          ],
+        ),
+        bottomNavigationBar: isCompact ? _buildBottomNavigation(theme) : null,
+      ),
+    );
+  }
 
-                            Widget navigationItem = Container(
-                              margin: const EdgeInsets.symmetric(
-                                horizontal: 8,
-                                vertical: 2,
-                              ),
-                              child: Material(
-                                color: Colors.transparent,
-                                child: InkWell(
-                                  borderRadius: BorderRadius.circular(8),
-                                  onTap: () {
-                                    setState(() {
-                                      _selectedIndex = index;
-                                    });
-                                  },
-                                  child: Container(
-                                    padding: EdgeInsets.symmetric(
-                                      horizontal: _isCollapsed ? 8 : 16,
-                                      vertical: 12,
-                                    ),
-                                    decoration: BoxDecoration(
-                                      color: isSelected
-                                          ? const Color(0xFF333333)
-                                          : Colors.transparent,
-                                      borderRadius: BorderRadius.circular(8),
-                                    ),
-                                    child: _isCollapsed
-                                        ? Center(
-                                            child: Icon(
-                                              item.icon,
-                                              color: isSelected
-                                                  ? Colors.white
-                                                  : const Color(0xFF888888),
-                                              size: 20,
-                                            ),
-                                          )
-                                        : Row(
-                                            children: [
-                                              Icon(
-                                                item.icon,
-                                                color: isSelected
-                                                    ? Colors.white
-                                                    : const Color(0xFF888888),
-                                                size: 20,
-                                              ),
-                                              const SizedBox(width: 12),
-                                              Text(
-                                                item.label,
-                                                style: TextStyle(
-                                                  color: isSelected
-                                                      ? Colors.white
-                                                      : const Color(0xFF888888),
-                                                  fontSize: 14,
-                                                  fontWeight: isSelected
-                                                      ? FontWeight.w500
-                                                      : FontWeight.normal,
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                  ),
-                                ),
-                              ),
-                            );
-
-                            // Add tooltip in collapsed state
-                            if (_isCollapsed) {
-                              return Tooltip(
-                                message: item.label,
-                                preferBelow: false,
-                                child: navigationItem,
-                              );
-                            }
-
-                            return navigationItem;
-                          },
-                        ),
-                      ),
-                    ],
+  Widget _buildSidebar(ShadThemeData theme) {
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 220),
+      curve: Curves.easeOutCubic,
+      width: _isCollapsed ? _collapsedWidth : _expandedWidth,
+      decoration: BoxDecoration(
+        color: theme.colorScheme.card,
+        border: Border(right: BorderSide(color: theme.colorScheme.border)),
+      ),
+      child: SafeArea(
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Row(
+                mainAxisAlignment: _isCollapsed
+                    ? MainAxisAlignment.center
+                    : MainAxisAlignment.start,
+                children: [
+                  Container(
+                    width: 36,
+                    height: 36,
+                    decoration: BoxDecoration(
+                      color: theme.colorScheme.primary,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Icon(
+                      LucideIcons.ship,
+                      size: 19,
+                      color: theme.colorScheme.primaryForeground,
+                    ),
                   ),
-                );
-              },
+                  if (!_isCollapsed) ...[
+                    const SizedBox(width: 12),
+                    Expanded(child: Text('shiplus', style: theme.textTheme.h4)),
+                  ],
+                ],
+              ),
             ),
-            // Right content area
+            ShadSeparator.horizontal(
+              margin: const EdgeInsets.symmetric(horizontal: 12),
+            ),
             Expanded(
-              child: Container(
-                color: const Color(0xFFF5F5F5),
-                child: IndexedStack(
-                  index: _selectedIndex,
-                  children: _navigationItems.asMap().entries.map((entry) {
-                    final index = entry.key;
-                    final item = entry.value;
-                    return Navigator(
-                      key: _navigatorKeys[index],
-                      onGenerateRoute: (settings) {
-                        return MaterialPageRoute(
-                          builder: (context) => item.page,
-                          settings: settings,
-                        );
-                      },
-                    );
-                  }).toList(),
+              child: ListView.separated(
+                padding: const EdgeInsets.all(12),
+                itemCount: _navigationItems.length,
+                separatorBuilder: (_, _) => const SizedBox(height: 4),
+                itemBuilder: (_, index) {
+                  final item = _navigationItems[index];
+                  return _NavigationButton(
+                    item: item,
+                    selected: _selectedIndex == index,
+                    collapsed: _isCollapsed,
+                    onPressed: () => _selectTab(index),
+                  );
+                },
+              ),
+            ),
+            ShadSeparator.horizontal(
+              margin: const EdgeInsets.symmetric(horizontal: 12),
+            ),
+            Padding(
+              padding: const EdgeInsets.all(12),
+              child: ShadButton.ghost(
+                width: double.infinity,
+                leading: Icon(
+                  _isCollapsed
+                      ? LucideIcons.panelLeftOpen
+                      : LucideIcons.panelLeftClose,
+                  size: 18,
                 ),
+                onPressed: () {
+                  setState(() => _isCollapsed = !_isCollapsed);
+                },
+                child: _isCollapsed ? null : const Text('Collapse'),
               ),
             ),
           ],
@@ -348,16 +211,111 @@ class _MainLayoutState extends State<MainLayout> with TickerProviderStateMixin {
       ),
     );
   }
+
+  Widget _buildContent(ShadThemeData theme) {
+    return ColoredBox(
+      color: theme.colorScheme.background,
+      child: IndexedStack(
+        index: _selectedIndex,
+        children: _navigationItems.asMap().entries.map((entry) {
+          return Navigator(
+            key: _navigatorKeys[entry.key],
+            onGenerateRoute: (settings) => MaterialPageRoute<void>(
+              builder: (_) => entry.value.page,
+              settings: settings,
+            ),
+          );
+        }).toList(),
+      ),
+    );
+  }
+
+  Widget _buildBottomNavigation(ShadThemeData theme) {
+    return SafeArea(
+      top: false,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: theme.colorScheme.card,
+          border: Border(top: BorderSide(color: theme.colorScheme.border)),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(8, 8, 8, 6),
+          child: Row(
+            children: _navigationItems.asMap().entries.map((entry) {
+              final selected = _selectedIndex == entry.key;
+              return Expanded(
+                child: ShadButton.ghost(
+                  foregroundColor: selected
+                      ? theme.colorScheme.foreground
+                      : theme.colorScheme.mutedForeground,
+                  backgroundColor: selected
+                      ? theme.colorScheme.accent
+                      : Colors.transparent,
+                  onPressed: () => _selectTab(entry.key),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(entry.value.icon, size: 19),
+                      const SizedBox(height: 3),
+                      Text(
+                        entry.value.label,
+                        style: const TextStyle(fontSize: 11),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            }).toList(),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _NavigationButton extends StatelessWidget {
+  const _NavigationButton({
+    required this.item,
+    required this.selected,
+    required this.collapsed,
+    required this.onPressed,
+  });
+
+  final NavigationItem item;
+  final bool selected;
+  final bool collapsed;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = ShadTheme.of(context);
+    final button = ShadButton.ghost(
+      width: double.infinity,
+      mainAxisAlignment: collapsed
+          ? MainAxisAlignment.center
+          : MainAxisAlignment.start,
+      foregroundColor: selected
+          ? theme.colorScheme.accentForeground
+          : theme.colorScheme.mutedForeground,
+      backgroundColor: selected ? theme.colorScheme.accent : Colors.transparent,
+      leading: Icon(item.icon, size: 19),
+      onPressed: onPressed,
+      child: collapsed ? null : Text(item.label),
+    );
+
+    if (!collapsed) return button;
+    return ShadTooltip(builder: (_) => Text(item.label), child: button);
+  }
 }
 
 class NavigationItem {
-  final IconData icon;
-  final String label;
-  final Widget page;
-
-  NavigationItem({
+  const NavigationItem({
     required this.icon,
     required this.label,
     required this.page,
   });
+
+  final IconData icon;
+  final String label;
+  final Widget page;
 }

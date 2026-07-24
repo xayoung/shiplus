@@ -27,7 +27,9 @@ class DownloadService {
           print('Using custom download path: ${_customDownloadPath!}');
           return _customDownloadPath!;
         } catch (e) {
-          print('Custom path not writable, fallback to system download path: $e');
+          print(
+            'Custom path not writable, fallback to system download path: $e',
+          );
         }
       }
 
@@ -44,16 +46,24 @@ class DownloadService {
               print('Using system download path: ${downloadsDir.path}');
               return downloadsDir.path;
             } catch (e) {
-              print('System download path not writable, fallback to app documents directory: $e');
+              print(
+                'System download path not writable, fallback to app documents directory: $e',
+              );
             }
           } else {
-            print('System download path not available, fallback to app documents directory');
+            print(
+              'System download path not available, fallback to app documents directory',
+            );
           }
         } catch (e) {
-          print('Failed to get system download path, fallback to app documents directory: $e');
+          print(
+            'Failed to get system download path, fallback to app documents directory: $e',
+          );
         }
       } else {
-        print('Current platform does not support system download directory, using app documents directory');
+        print(
+          'Current platform does not support system download directory, using app documents directory',
+        );
       }
 
       // 3. Use downloads folder in app documents directory as final fallback
@@ -100,7 +110,8 @@ class DownloadService {
     String saveDir, // Modified parameter order, added saveDir parameter
     String fileName, {
     String? taskId, // New task ID parameter
-    String audioLang = '', // Audio language selection, empty string means use default from config
+    String audioLang =
+        '', // Audio language selection, empty string means use default from config
     List<String>? extraArgs,
     Function(String)? onLog,
     Function(DownloadProgress)? onProgress, // Add progress callback
@@ -155,7 +166,6 @@ class DownloadService {
         .trim();
   }
 
-  /// 检查下载目录是否可用
   static Future<bool> isDownloadPathAccessible() async {
     try {
       final path = await getDownloadPath();

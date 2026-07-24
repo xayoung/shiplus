@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:shadcn_ui/shadcn_ui.dart';
 import 'package:flutter/services.dart';
 import '../models/download_progress.dart';
 import '../services/download_service.dart';
@@ -22,7 +23,6 @@ class _DownloadPageState extends State<DownloadPage> {
   final ScrollController _logScrollController = ScrollController();
   bool _showAdvancedOptions = false;
 
-  // 添加进度状态变量
   DownloadProgress? _videoProgress;
   DownloadProgress? _audioProgress;
 
@@ -30,7 +30,6 @@ class _DownloadPageState extends State<DownloadPage> {
   void initState() {
     super.initState();
     _loadCurrentPath();
-    // 预设一些避免交互的参数
     // _extraArgsController.text = '--auto-select --select-video best --select-audio best';
   }
 
@@ -66,19 +65,13 @@ class _DownloadPageState extends State<DownloadPage> {
 
   void _showSuccessSnackBar(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: Colors.green,
-      ),
+      SnackBar(content: Text(message), backgroundColor: Colors.green),
     );
   }
 
   void _showErrorSnackBar(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: Colors.red,
-      ),
+      SnackBar(content: Text(message), backgroundColor: Colors.red),
     );
   }
 
@@ -98,9 +91,10 @@ class _DownloadPageState extends State<DownloadPage> {
       return;
     }
 
-    // 验证URL格式
     if (!url.startsWith('http://') && !url.startsWith('https://')) {
-      _showErrorSnackBar('Please enter a valid URL (starting with http:// or https://)');
+      _showErrorSnackBar(
+        'Please enter a valid URL (starting with http:// or https://)',
+      );
       return;
     }
 
@@ -119,14 +113,13 @@ class _DownloadPageState extends State<DownloadPage> {
 
       await DownloadService.downloadVideo(
         url,
-        _currentPath, // 使用当前路径
+        _currentPath,
         fileName,
         extraArgs: _parseExtraArgs(_extraArgsController.text),
         onLog: (log) {
           setState(() {
             _downloadLogs.add(log);
           });
-          // 自动滚动到底部
           WidgetsBinding.instance.addPostFrameCallback((_) {
             if (_logScrollController.hasClients) {
               _logScrollController.animateTo(
@@ -154,11 +147,9 @@ class _DownloadPageState extends State<DownloadPage> {
         });
         _showSuccessSnackBar('Video download completed');
 
-        // 清空输入框
         _urlController.clear();
         _fileNameController.clear();
 
-        // 3秒后清空日志
         Future.delayed(const Duration(seconds: 3), () {
           if (mounted) {
             setState(() {
@@ -181,7 +172,6 @@ class _DownloadPageState extends State<DownloadPage> {
           _isDownloading = false;
         });
 
-        // 3秒后清除状态信息
         Future.delayed(const Duration(seconds: 3), () {
           if (mounted) {
             setState(() {
@@ -198,17 +188,20 @@ class _DownloadPageState extends State<DownloadPage> {
       children: [
         if (_videoProgress != null) ...[
           Text('Video: ${_videoProgress!.quality}'),
-          LinearProgressIndicator(value: _videoProgress!.percentage / 100),
+          ShadProgress(value: _videoProgress!.percentage / 100),
           Text(
-              '${_videoProgress!.currentSegment}/${_videoProgress!.totalSegments} (${_videoProgress!.percentage.toStringAsFixed(1)}%)'),
+            '${_videoProgress!.currentSegment}/${_videoProgress!.totalSegments} (${_videoProgress!.percentage.toStringAsFixed(1)}%)',
+          ),
           Text(
-              '${_videoProgress!.downloadedSize}/${_videoProgress!.totalSize} - ${_videoProgress!.speed} - ETA: ${_videoProgress!.eta}'),
+            '${_videoProgress!.downloadedSize}/${_videoProgress!.totalSize} - ${_videoProgress!.speed} - ETA: ${_videoProgress!.eta}',
+          ),
         ],
         if (_audioProgress != null) ...[
           Text('Audio: ${_audioProgress!.quality}'),
-          LinearProgressIndicator(value: _audioProgress!.percentage / 100),
+          ShadProgress(value: _audioProgress!.percentage / 100),
           Text(
-              '${_audioProgress!.currentSegment}/${_audioProgress!.totalSegments} (${_audioProgress!.percentage.toStringAsFixed(1)}%)'),
+            '${_audioProgress!.currentSegment}/${_audioProgress!.totalSegments} (${_audioProgress!.percentage.toStringAsFixed(1)}%)',
+          ),
         ],
       ],
     );
@@ -226,7 +219,6 @@ class _DownloadPageState extends State<DownloadPage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // 当前路径显示卡片
             Card(
               child: Padding(
                 padding: const EdgeInsets.all(16.0),
@@ -243,10 +235,7 @@ class _DownloadPageState extends State<DownloadPage> {
                     const SizedBox(height: 8),
                     Text(
                       'Current Download Path:',
-                      style: TextStyle(
-                        color: Colors.grey[600],
-                        fontSize: 14,
-                      ),
+                      style: TextStyle(color: Colors.grey[600], fontSize: 14),
                     ),
                     const SizedBox(height: 4),
                     Container(
@@ -294,7 +283,6 @@ class _DownloadPageState extends State<DownloadPage> {
             ),
             const SizedBox(height: 16),
 
-            // 下载表单卡片
             Card(
               child: Padding(
                 padding: const EdgeInsets.all(16.0),
@@ -330,7 +318,6 @@ class _DownloadPageState extends State<DownloadPage> {
                     ),
                     const SizedBox(height: 16),
 
-                    // 高级选项切换
                     InkWell(
                       onTap: () {
                         setState(() {
@@ -349,14 +336,14 @@ class _DownloadPageState extends State<DownloadPage> {
                       ),
                     ),
 
-                    // 高级选项内容
                     if (_showAdvancedOptions) ...[
                       const SizedBox(height: 16),
                       TextField(
                         controller: _extraArgsController,
                         decoration: const InputDecoration(
                           labelText: 'Extra Parameters (Optional)',
-                          hintText: 'Example: --auto-select --select-video best',
+                          hintText:
+                              'Example: --auto-select --select-video best',
                           border: OutlineInputBorder(),
                         ),
                         enabled: !_isDownloading,
@@ -385,16 +372,21 @@ class _DownloadPageState extends State<DownloadPage> {
                                     child: CircularProgressIndicator(
                                       strokeWidth: 2,
                                       valueColor: AlwaysStoppedAnimation<Color>(
-                                          Colors.white),
+                                        Colors.white,
+                                      ),
                                     ),
                                   ),
                                   SizedBox(width: 12),
-                                  Text('Downloading...',
-                                      style: TextStyle(color: Colors.white)),
+                                  Text(
+                                    'Downloading...',
+                                    style: TextStyle(color: Colors.white),
+                                  ),
                                 ],
                               )
-                            : const Text('Start Download',
-                                style: TextStyle(color: Colors.white)),
+                            : const Text(
+                                'Start Download',
+                                style: TextStyle(color: Colors.white),
+                              ),
                       ),
                     ),
                   ],
@@ -404,7 +396,6 @@ class _DownloadPageState extends State<DownloadPage> {
 
             const SizedBox(height: 16),
 
-            // 下载状态显示
             if (_downloadStatus.isNotEmpty) ...[
               Card(
                 child: Padding(
@@ -415,13 +406,13 @@ class _DownloadPageState extends State<DownloadPage> {
                         _downloadStatus.contains('failed')
                             ? Icons.error
                             : _downloadStatus.contains('completed')
-                                ? Icons.check_circle
-                                : Icons.info,
+                            ? Icons.check_circle
+                            : Icons.info,
                         color: _downloadStatus.contains('failed')
                             ? Colors.red
                             : _downloadStatus.contains('completed')
-                                ? Colors.green
-                                : Colors.blue,
+                            ? Colors.green
+                            : Colors.blue,
                       ),
                       const SizedBox(width: 12),
                       Expanded(
@@ -432,8 +423,8 @@ class _DownloadPageState extends State<DownloadPage> {
                             color: _downloadStatus.contains('failed')
                                 ? Colors.red
                                 : _downloadStatus.contains('completed')
-                                    ? Colors.green
-                                    : null,
+                                ? Colors.green
+                                : null,
                           ),
                         ),
                       ),
@@ -444,7 +435,6 @@ class _DownloadPageState extends State<DownloadPage> {
               const SizedBox(height: 16),
             ],
 
-            // 进度显示
             if (_videoProgress != null || _audioProgress != null) ...[
               Card(
                 child: Padding(
@@ -468,7 +458,6 @@ class _DownloadPageState extends State<DownloadPage> {
               const SizedBox(height: 16),
             ],
 
-            // 下载日志显示
             if (_downloadLogs.isNotEmpty) ...[
               Card(
                 child: Padding(

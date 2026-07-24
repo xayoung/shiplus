@@ -3,7 +3,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 class ProxyService {
   static const String _proxyEnabledKey = 'proxy_enabled';
   static const String _proxyUrlKey = 'proxy_url';
-  
+
   // Default values
   static const bool defaultProxyEnabled = false;
   static const String defaultProxyUrl = '';
@@ -57,16 +57,10 @@ class ProxyService {
     try {
       final enabled = await getProxyEnabled();
       final url = await getProxyUrl();
-      return {
-        'enabled': enabled,
-        'url': url,
-      };
+      return {'enabled': enabled, 'url': url};
     } catch (e) {
       print('Error getting proxy configuration: $e');
-      return {
-        'enabled': defaultProxyEnabled,
-        'url': defaultProxyUrl,
-      };
+      return {'enabled': defaultProxyEnabled, 'url': defaultProxyUrl};
     }
   }
 
@@ -110,13 +104,15 @@ class ProxyService {
   /// Validate proxy URL format
   static bool isValidProxyUrl(String url) {
     if (url.isEmpty) return true; // Empty URL is valid (no proxy)
-    
+
     try {
       final uri = Uri.parse(url);
       // Check if it's a valid HTTP/HTTPS/SOCKS URL
-      return uri.hasScheme && 
-             (uri.scheme == 'http' || uri.scheme == 'https' || uri.scheme == 'socks5') &&
-             uri.hasAuthority;
+      return uri.hasScheme &&
+          (uri.scheme == 'http' ||
+              uri.scheme == 'https' ||
+              uri.scheme == 'socks5') &&
+          uri.hasAuthority;
     } catch (e) {
       return false;
     }

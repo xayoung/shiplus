@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:shadcn_ui/shadcn_ui.dart';
 import '../services/global_download_manager.dart';
 import '../models/download_task.dart';
+import 'ui/shiplus_ui.dart';
 
 class DownloadManagerPage extends StatefulWidget {
   const DownloadManagerPage({super.key});
@@ -29,33 +31,18 @@ class _DownloadManagerPageState extends State<DownloadManagerPage> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // Page title
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Row(
-                  children: [
-                    Icon(
-                      Icons.download,
-                      color: Theme.of(context).primaryColor,
-                      size: 28,
-                    ),
-                    const SizedBox(width: 12),
-                    const Text(
-                      'Download',
-                      style: TextStyle(
-                        fontSize: 24,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ],
-                ),
-                TextButton.icon(
+            ShiplusPageHeader(
+              title: 'Downloads',
+              description: 'Track active jobs and manage completed downloads.',
+              icon: LucideIcons.download,
+              actions: [
+                ShadButton.ghost(
                   onPressed: () {
                     GlobalDownloadManager().clearCompletedTasks();
                     _showSuccessSnackBar('Completed tasks cleared');
                   },
-                  icon: const Icon(Icons.clear_all, size: 18),
-                  label: const Text('Clear'),
+                  leading: const Icon(LucideIcons.listX, size: 17),
+                  child: const Text('Clear completed'),
                 ),
               ],
             ),
@@ -141,37 +128,17 @@ class _DownloadManagerPageState extends State<DownloadManagerPage> {
   }
 
   Widget _buildEmptyState() {
-    return Center(
-      child: Card(
-        child: Container(
-          width: double.infinity,
-          padding: const EdgeInsets.all(48),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(
-                Icons.download_outlined,
-                size: 64,
-                color: Colors.grey[400],
-              ),
-              const SizedBox(height: 16),
-              Text(
-                'No Download Tasks',
-                style: TextStyle(
-                  color: Colors.grey[600],
-                  fontSize: 18,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
+    return const ShiplusEmptyState(
+      title: 'No download tasks',
+      description: 'Downloads you start will appear here.',
+      icon: LucideIcons.download,
     );
   }
 
   Widget _buildStatsCard(
-      GlobalDownloadManager downloadManager, List<DownloadTask> tasks) {
+    GlobalDownloadManager downloadManager,
+    List<DownloadTask> tasks,
+  ) {
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(20),
@@ -215,7 +182,11 @@ class _DownloadManagerPageState extends State<DownloadManagerPage> {
   }
 
   Widget _buildStatItem(
-      String label, String value, IconData icon, Color color) {
+    String label,
+    String value,
+    IconData icon,
+    Color color,
+  ) {
     return Column(
       children: [
         Container(
@@ -224,28 +195,15 @@ class _DownloadManagerPageState extends State<DownloadManagerPage> {
             color: color.withOpacity(0.1),
             borderRadius: BorderRadius.circular(8),
           ),
-          child: Icon(
-            icon,
-            size: 24,
-            color: color,
-          ),
+          child: Icon(icon, size: 24, color: color),
         ),
         const SizedBox(height: 8),
         Text(
           value,
-          style: const TextStyle(
-            fontSize: 20,
-            fontWeight: FontWeight.bold,
-          ),
+          style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
         ),
         const SizedBox(height: 2),
-        Text(
-          label,
-          style: TextStyle(
-            fontSize: 12,
-            color: Colors.grey[600],
-          ),
-        ),
+        Text(label, style: TextStyle(fontSize: 12, color: Colors.grey[600])),
       ],
     );
   }
@@ -255,7 +213,7 @@ class _DownloadManagerPageState extends State<DownloadManagerPage> {
       padding: const EdgeInsets.symmetric(vertical: 12),
       child: Row(
         children: [
-            // Status icon
+          // Status icon
           Container(
             width: 40,
             height: 40,
@@ -271,7 +229,7 @@ class _DownloadManagerPageState extends State<DownloadManagerPage> {
           ),
           const SizedBox(width: 16),
 
-            // Task information
+          // Task information
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -290,7 +248,9 @@ class _DownloadManagerPageState extends State<DownloadManagerPage> {
                   children: [
                     Container(
                       padding: const EdgeInsets.symmetric(
-                          horizontal: 8, vertical: 2),
+                        horizontal: 8,
+                        vertical: 2,
+                      ),
                       decoration: BoxDecoration(
                         color: Color(task.statusColor).withOpacity(0.1),
                         borderRadius: BorderRadius.circular(12),
@@ -329,10 +289,7 @@ class _DownloadManagerPageState extends State<DownloadManagerPage> {
                   const SizedBox(height: 4),
                   Text(
                     task.error!,
-                    style: const TextStyle(
-                      fontSize: 12,
-                      color: Colors.red,
-                    ),
+                    style: const TextStyle(fontSize: 12, color: Colors.red),
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                   ),
@@ -341,7 +298,7 @@ class _DownloadManagerPageState extends State<DownloadManagerPage> {
             ),
           ),
 
-            // Action buttons
+          // Action buttons
           _buildTaskActions(task),
         ],
       ),
@@ -355,12 +312,10 @@ class _DownloadManagerPageState extends State<DownloadManagerPage> {
 
     if (tracker == null) {
       // If there is no status tracker, display a simple progress bar
-      return LinearProgressIndicator(
+      return ShadProgress(
         value: task.progress / 100,
         backgroundColor: Colors.grey[300],
-        valueColor: AlwaysStoppedAnimation<Color>(
-          Color(task.statusColor),
-        ),
+        valueColor: AlwaysStoppedAnimation<Color>(Color(task.statusColor)),
       );
     }
 
@@ -394,12 +349,10 @@ class _DownloadManagerPageState extends State<DownloadManagerPage> {
           ],
         ),
         const SizedBox(height: 4),
-        LinearProgressIndicator(
+        ShadProgress(
           value: tracker.overallProgress / 100,
           backgroundColor: Colors.grey[300],
-          valueColor: AlwaysStoppedAnimation<Color>(
-            Color(task.statusColor),
-          ),
+          valueColor: AlwaysStoppedAnimation<Color>(Color(task.statusColor)),
         ),
 
         // Vid, Aud and Sub progress separately
@@ -408,7 +361,7 @@ class _DownloadManagerPageState extends State<DownloadManagerPage> {
             tracker.subtitleProgresses.isNotEmpty) ...[
           const SizedBox(height: 8),
 
-            // Video progress
+          // Video progress
           if (tracker.videoProgress != null) ...[
             Row(
               children: [
@@ -424,7 +377,9 @@ class _DownloadManagerPageState extends State<DownloadManagerPage> {
                 Text(
                   'Vid (${tracker.videoProgress!.quality})',
                   style: const TextStyle(
-                      fontSize: 11, fontWeight: FontWeight.w500),
+                    fontSize: 11,
+                    fontWeight: FontWeight.w500,
+                  ),
                 ),
                 const Spacer(),
                 Text(
@@ -434,7 +389,7 @@ class _DownloadManagerPageState extends State<DownloadManagerPage> {
               ],
             ),
             const SizedBox(height: 2),
-            LinearProgressIndicator(
+            ShadProgress(
               value: tracker.videoProgress!.percentage / 100,
               backgroundColor: Colors.blue[100],
               valueColor: const AlwaysStoppedAnimation<Color>(Colors.blue),
@@ -455,7 +410,7 @@ class _DownloadManagerPageState extends State<DownloadManagerPage> {
             const SizedBox(height: 6),
           ],
 
-            // Audio progress
+          // Audio progress
           if (tracker.audioProgresses.isNotEmpty) ...[
             for (int i = 0; i < tracker.audioProgresses.length; i++) ...[
               Row(
@@ -472,7 +427,9 @@ class _DownloadManagerPageState extends State<DownloadManagerPage> {
                   Text(
                     'Aud (${tracker.audioProgresses[i].quality})',
                     style: const TextStyle(
-                        fontSize: 11, fontWeight: FontWeight.w500),
+                      fontSize: 11,
+                      fontWeight: FontWeight.w500,
+                    ),
                   ),
                   const Spacer(),
                   Text(
@@ -482,7 +439,7 @@ class _DownloadManagerPageState extends State<DownloadManagerPage> {
                 ],
               ),
               const SizedBox(height: 2),
-              LinearProgressIndicator(
+              ShadProgress(
                 value: tracker.audioProgresses[i].percentage / 100,
                 backgroundColor: Colors.green[100],
                 valueColor: const AlwaysStoppedAnimation<Color>(Colors.green),
@@ -506,7 +463,7 @@ class _DownloadManagerPageState extends State<DownloadManagerPage> {
             const SizedBox(height: 6),
           ],
 
-            // Subtitle progress
+          // Subtitle progress
           if (tracker.subtitleProgresses.isNotEmpty) ...[
             for (int i = 0; i < tracker.subtitleProgresses.length; i++) ...[
               Row(
@@ -523,7 +480,9 @@ class _DownloadManagerPageState extends State<DownloadManagerPage> {
                   Text(
                     'Sub (${tracker.subtitleProgresses[i].quality})',
                     style: const TextStyle(
-                        fontSize: 11, fontWeight: FontWeight.w500),
+                      fontSize: 11,
+                      fontWeight: FontWeight.w500,
+                    ),
                   ),
                   const Spacer(),
                   Text(
@@ -533,7 +492,7 @@ class _DownloadManagerPageState extends State<DownloadManagerPage> {
                 ],
               ),
               const SizedBox(height: 2),
-              LinearProgressIndicator(
+              ShadProgress(
                 value: tracker.subtitleProgresses[i].percentage / 100,
                 backgroundColor: Colors.orange[100],
                 valueColor: const AlwaysStoppedAnimation<Color>(Colors.orange),
@@ -599,7 +558,9 @@ class _DownloadManagerPageState extends State<DownloadManagerPage> {
             icon: const Icon(Icons.stop, size: 20),
             onPressed: () {
               GlobalDownloadManager().cancelDownload(task.id);
-              _showSuccessSnackBar('Download cancelled and deleted: ${task.title}');
+              _showSuccessSnackBar(
+                'Download cancelled and deleted: ${task.title}',
+              );
             },
             tooltip: 'Cancel and Delete',
           ),
@@ -634,7 +595,9 @@ class _DownloadManagerPageState extends State<DownloadManagerPage> {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Delete Task'),
-        content: Text('Are you sure you want to delete the download task "${task.title}"?'),
+        content: Text(
+          'Are you sure you want to delete the download task "${task.title}"?',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(),

@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:dio/dio.dart';
 import 'package:shiplus/widgets/play_detail_page.dart';
+import 'package:shadcn_ui/shadcn_ui.dart';
 import 'weekend_page.dart';
 import 'main_layout.dart';
 import '../utils/dio_helper.dart';
 
-// 数据模型类
 class SeasonItem {
   final String id;
   final Map<String, dynamic> metadata;
@@ -20,10 +20,9 @@ class SeasonItem {
   });
 
   factory SeasonItem.fromJson(Map<String, dynamic> json) {
-    final actions =
-        (json['actions'] as List<dynamic>?)?.cast<Map<String, dynamic>>();
+    final actions = (json['actions'] as List<dynamic>?)
+        ?.cast<Map<String, dynamic>>();
 
-    // 从actions中提取pageid
     String? pageid;
     if (actions != null && actions.isNotEmpty) {
       final href = actions[0]['href']?.toString() ?? '';
@@ -42,7 +41,6 @@ class SeasonItem {
   }
 }
 
-// 容器数据模型类
 class SeasonContainer {
   final String title;
   final String layout;
@@ -85,29 +83,23 @@ class _SeasonPageState extends State<SeasonPage> {
       final dio = await DioHelper.createDioWithCookies();
       final response = await dio.get(
         'https://f1tv.formula1.com/2.0/R/ENG/WEB_DASH/ALL/PAGE/${widget.pageid}/F1_TV_Pro_Annual/3',
-        options: Options(
-          headers: {
-            'Content-Type': 'application/json',
-          },
-        ),
+        options: Options(headers: {'Content-Type': 'application/json'}),
       );
 
       if (response.statusCode == 200) {
         final data = response.data;
 
-        // 处理所有容器，不进行过滤
         List<SeasonContainer> seasonContainers = [];
 
         if (data['resultObj']?['containers'] != null) {
           final containers = data['resultObj']['containers'] as List<dynamic>;
 
-          // 处理每个容器
           for (final container in containers) {
             String title = container['title']?.toString() ?? '';
             if (title.isEmpty) {
-              final collectionName = container['retrieveItems']?['resultObj']
-                      ?['collectionName']
-                  ?.toString();
+              final collectionName =
+                  container['retrieveItems']?['resultObj']?['collectionName']
+                      ?.toString();
               if (collectionName != null && collectionName.isNotEmpty) {
                 title = collectionName;
               }
@@ -117,8 +109,9 @@ class _SeasonPageState extends State<SeasonPage> {
 
             if (container['retrieveItems']?['resultObj']?['containers'] !=
                 null) {
-              final itemContainers = container['retrieveItems']['resultObj']
-                  ['containers'] as List<dynamic>;
+              final itemContainers =
+                  container['retrieveItems']['resultObj']['containers']
+                      as List<dynamic>;
 
               for (final item in itemContainers) {
                 try {
@@ -130,13 +123,14 @@ class _SeasonPageState extends State<SeasonPage> {
               }
             }
 
-            // 只添加有内容的容器
             if (containerItems.isNotEmpty) {
-              seasonContainers.add(SeasonContainer(
-                title: title,
-                layout: layout,
-                items: containerItems,
-              ));
+              seasonContainers.add(
+                SeasonContainer(
+                  title: title,
+                  layout: layout,
+                  items: containerItems,
+                ),
+              );
             }
           }
         }
@@ -164,23 +158,17 @@ class _SeasonPageState extends State<SeasonPage> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = ShadTheme.of(context);
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: theme.colorScheme.background,
       appBar: AppBar(
-        backgroundColor: Colors.white,
+        backgroundColor: theme.colorScheme.background,
         elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.black),
+        leading: ShadIconButton.ghost(
+          icon: const Icon(LucideIcons.arrowLeft, size: 18),
           onPressed: () => NavigationHelper.popPageInCurrentTab(context),
         ),
-        title: const Text(
-          'Season',
-          style: TextStyle(
-            color: Colors.black,
-            fontSize: 20,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
+        title: Text('Season', style: theme.textTheme.h4),
       ),
       body: _buildContent(),
     );
@@ -205,18 +193,11 @@ class _SeasonPageState extends State<SeasonPage> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Icon(
-              Icons.error_outline,
-              size: 64,
-              color: Colors.red,
-            ),
+            const Icon(Icons.error_outline, size: 64, color: Colors.red),
             const SizedBox(height: 16),
             const Text(
               'Error',
-              style: TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
-              ),
+              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 8),
             Text(
@@ -233,10 +214,7 @@ class _SeasonPageState extends State<SeasonPage> {
       return const Center(
         child: Text(
           'No content to display',
-          style: TextStyle(
-            fontSize: 16,
-            color: Colors.grey,
-          ),
+          style: TextStyle(fontSize: 16, color: Colors.grey),
         ),
       );
     }
@@ -253,12 +231,10 @@ class _SeasonPageState extends State<SeasonPage> {
     );
   }
 
-  // 构建容器部分
   Widget _buildContainerSection(SeasonContainer container, int containerIndex) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // 容器标题
         Padding(
           padding: const EdgeInsets.only(bottom: 16.0, top: 8.0),
           child: Text(
@@ -271,7 +247,6 @@ class _SeasonPageState extends State<SeasonPage> {
           ),
         ),
 
-        // 容器内容
         GridView.builder(
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
@@ -288,21 +263,17 @@ class _SeasonPageState extends State<SeasonPage> {
           },
         ),
 
-        // 容器之间的间隔
         const SizedBox(height: 32),
       ],
     );
   }
 
-  // 构建单个项目
   Widget _buildSeasonItem(SeasonItem item, int index) {
-    // 构建图片URL
     final pictureUrl = item.metadata['pictureUrl']?.toString() ?? '';
     final imageUrl = pictureUrl.isNotEmpty
         ? 'https://f1tv.formula1.com/image-resizer/image/$pictureUrl?w=1024&h=576&q=HI&o=L'
         : 'https://www.formula1.com/etc/designs/fom-website/images/f1-logo-red.png';
 
-    // 获取赛事信息
     final emfAttributes = item.metadata['emfAttributes'] ?? {};
     final meetingNumber = emfAttributes['Meeting_Number']?.toString() ?? '';
     final countryName =
@@ -315,7 +286,6 @@ class _SeasonPageState extends State<SeasonPage> {
         print('Item selected: ${item.metadata['title']}');
         print('Item ID: ${item.id}');
         print('Page ID: ${item.pageid}');
-        // 使用NavigationHelper在当前tab中跳转到weekend页面
         if (item.pageid != null) {
           NavigationHelper.pushPageInCurrentTab(
             context,
@@ -330,12 +300,9 @@ class _SeasonPageState extends State<SeasonPage> {
       },
       child: Container(
         clipBehavior: Clip.hardEdge,
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(8),
-        ),
+        decoration: BoxDecoration(borderRadius: BorderRadius.circular(8)),
         child: Stack(
           children: [
-            // 背景图片
             Positioned.fill(
               child: Image.network(
                 imageUrl,
@@ -352,7 +319,6 @@ class _SeasonPageState extends State<SeasonPage> {
                 },
               ),
             ),
-            // 底部覆盖层
             Positioned(
               bottom: 0,
               left: 0,
@@ -363,17 +329,13 @@ class _SeasonPageState extends State<SeasonPage> {
                   gradient: LinearGradient(
                     begin: Alignment.topCenter,
                     end: Alignment.bottomCenter,
-                    colors: [
-                      Colors.transparent,
-                      Colors.black87,
-                    ],
+                    colors: [Colors.transparent, Colors.black87],
                   ),
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    // 标题行
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
@@ -400,7 +362,6 @@ class _SeasonPageState extends State<SeasonPage> {
                           ),
                       ],
                     ),
-                    // 副标题
                     Text(
                       globalTitle,
                       style: const TextStyle(

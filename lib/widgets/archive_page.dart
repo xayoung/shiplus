@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:dio/dio.dart';
 import 'package:shiplus/widgets/play_detail_page.dart';
+import 'package:shadcn_ui/shadcn_ui.dart';
 import 'dart:convert';
 import 'season_page.dart';
 import 'main_layout.dart';
 import '../utils/dio_helper.dart';
+import 'ui/shiplus_ui.dart';
 
 // Data model class
 class ArchiveItem {
@@ -75,11 +77,7 @@ class _ArchivePageState extends State<ArchivePage> {
       final dio = await DioHelper.createDioWithCookies();
       final response = await dio.get(
         'https://f1tv.formula1.com/2.0/R/ENG/WEB_DASH/ALL/PAGE/493/F1_TV_Pro_Annual/3',
-        options: Options(
-          headers: {
-            'Content-Type': 'application/json',
-          },
-        ),
+        options: Options(headers: {'Content-Type': 'application/json'}),
       );
 
       if (response.statusCode == 200) {
@@ -97,8 +95,9 @@ class _ArchivePageState extends State<ArchivePage> {
 
             if (container['retrieveItems']?['resultObj']?['containers'] !=
                 null) {
-              final itemContainers = container['retrieveItems']['resultObj']
-                  ['containers'] as List<dynamic>;
+              final itemContainers =
+                  container['retrieveItems']['resultObj']['containers']
+                      as List<dynamic>;
 
               // Add found items to seasonsArray
               for (final item in itemContainers) {
@@ -148,30 +147,21 @@ class _ArchivePageState extends State<ArchivePage> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // Page title
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Text(
-                  'Archive',
-                  style: TextStyle(
-                    fontSize: 28,
-                    fontWeight: FontWeight.bold,
-                    color: Color(0xFF1E1E1E),
-                  ),
-                ),
-                IconButton(
+            ShiplusPageHeader(
+              title: 'Archive',
+              description: 'Explore the full Formula 1 content catalogue.',
+              icon: LucideIcons.archive,
+              actions: [
+                ShadIconButton.outline(
                   onPressed: _fetchData,
-                  icon: const Icon(Icons.refresh),
-                  tooltip: 'Refresh',
+                  icon: const Icon(LucideIcons.refreshCw, size: 17),
                 ),
               ],
             ),
             const SizedBox(height: 32),
 
             // Content area
-            Expanded(
-              child: _buildContent(),
-            ),
+            Expanded(child: _buildContent()),
           ],
         ),
       ),
@@ -180,100 +170,35 @@ class _ArchivePageState extends State<ArchivePage> {
 
   Widget _buildContent() {
     if (_isLoading) {
-      return const Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            CircularProgressIndicator(),
-            SizedBox(height: 16),
-            Text('Loading...'),
-          ],
-        ),
-      );
+      return const ShiplusLoadingState();
     }
 
     if (_error != null) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              Icons.error_outline,
-              size: 64,
-              color: Colors.red[300],
-            ),
-            const SizedBox(height: 16),
-            Text(
-              '加载失败',
-              style: TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
-                color: Colors.grey[600],
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              _error!,
-              style: TextStyle(
-                fontSize: 14,
-                color: Colors.grey[500],
-              ),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 16),
-            ElevatedButton(
-              onPressed: _fetchData,
-              child: const Text('重试'),
-            ),
-          ],
-        ),
+      return ShiplusErrorState(
+        title: 'Archive failed to load',
+        message: _error!,
+        onRetry: _fetchData,
       );
     }
 
     if (_items.isEmpty) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              Icons.inbox_outlined,
-              size: 64,
-              color: Colors.grey[400],
-            ),
-            const SizedBox(height: 16),
-            Text(
-              '暂无内容',
-              style: TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
-                color: Colors.grey[600],
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              '没有找到任何内容',
-              style: TextStyle(
-                fontSize: 14,
-                color: Colors.grey[500],
-              ),
-            ),
-          ],
-        ),
+      return const ShiplusEmptyState(
+        title: 'No archive content',
+        description: 'No content is available for this account.',
       );
     }
 
     return LayoutBuilder(
       builder: (context, constraints) {
-        // 根据窗口宽度动态计算每行显示的item数量
         int crossAxisCount;
         if (constraints.maxWidth < 600) {
-          crossAxisCount = 2; // 小屏幕显示2列
+          crossAxisCount = 2;
         } else if (constraints.maxWidth < 900) {
-          crossAxisCount = 3; // 中等屏幕显示3列
+          crossAxisCount = 3;
         } else if (constraints.maxWidth < 1200) {
-          crossAxisCount = 4; // 大屏幕显示4列
+          crossAxisCount = 4;
         } else {
-          crossAxisCount = 5; // 超大屏幕显示5列
+          crossAxisCount = 5;
         }
 
         return GridView.builder(
@@ -294,20 +219,16 @@ class _ArchivePageState extends State<ArchivePage> {
   }
 
   Widget _buildItemCard(ArchiveItem item) {
-    // 构建图片URL，参考React Native版本的逻辑
     String imageUrl = item.imageUrl.isNotEmpty
         ? 'https://f1tv.formula1.com/image-resizer/image/${item.imageUrl}?w=1024&h=576&q=HI&o=L'
         : 'https://www.formula1.com/etc/designs/fom-website/images/f1-logo-red.png';
 
-    return Card(
-      elevation: 2,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-      ),
+    return ShadCard(
+      padding: EdgeInsets.zero,
+      clipBehavior: Clip.antiAlias,
       child: InkWell(
         borderRadius: BorderRadius.circular(12),
         onTap: () {
-          // 使用NavigationHelper在当前tab中跳转到season页面
           print('Season selected: ${item.title}');
           print('Page ID: ${item.pageid}');
           print('Item ID: ${item.id}');
@@ -326,7 +247,6 @@ class _ArchivePageState extends State<ArchivePage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // 图片区域
             Expanded(
               flex: 3,
               child: Container(
@@ -350,7 +270,7 @@ class _ArchivePageState extends State<ArchivePage> {
                   ),
                 ),
               ),
-            )
+            ),
           ],
         ),
       ),

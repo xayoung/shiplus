@@ -5,13 +5,40 @@
 // gestures. You can also use WidgetTester to find child widgets in the widget
 // tree, read text, and verify that the values of widget properties are correct.
 
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shiplus/main.dart';
 
 void main() {
-  testWidgets('Basic test to ensure test framework works',
-      (WidgetTester tester) async {
-    // This is a minimal test to ensure the test framework is working
-    // More comprehensive tests can be added later when the app is more stable
-    expect(1 + 1, equals(2));
+  testWidgets('Material pages have a ScaffoldMessenger ancestor', (
+    WidgetTester tester,
+  ) async {
+    await tester.pumpWidget(const MyApp(home: _SnackBarProbe()));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Show message'));
+    await tester.pump();
+
+    expect(find.text('Download started'), findsOneWidget);
   });
+}
+
+class _SnackBarProbe extends StatelessWidget {
+  const _SnackBarProbe();
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: Center(
+        child: ElevatedButton(
+          onPressed: () {
+            ScaffoldMessenger.of(
+              context,
+            ).showSnackBar(const SnackBar(content: Text('Download started')));
+          },
+          child: const Text('Show message'),
+        ),
+      ),
+    );
+  }
 }

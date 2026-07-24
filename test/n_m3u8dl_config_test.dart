@@ -4,12 +4,12 @@ import 'package:shiplus/services/n_m3u8dl_config_service.dart';
 void main() {
   group('N_m3u8dlConfigService Tests', () {
     setUpAll(() async {
-      // 初始化 Flutter binding
+      // Initialize the Flutter binding.
       TestWidgetsFlutterBinding.ensureInitialized();
     });
 
     setUp(() async {
-      // 清理内存缓存
+      // Clear the in-memory cache.
       N_m3u8dlConfigService.clearCache();
     });
 
@@ -88,13 +88,13 @@ void main() {
     });
 
     test('should reset to defaults correctly', () async {
-      // 设置非默认值
+      // Set non-default values.
       await N_m3u8dlConfigService.setFormat('mkv');
       await N_m3u8dlConfigService.setSkipSub(false);
       await N_m3u8dlConfigService.setResolution('1920');
       await N_m3u8dlConfigService.setRange('HLG');
 
-      // 重置为默认值
+      // Restore defaults.
       await N_m3u8dlConfigService.resetToDefaults();
 
       final format = await N_m3u8dlConfigService.getFormat();

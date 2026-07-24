@@ -2,37 +2,31 @@ import 'package:dio/dio.dart';
 import 'package:dio/io.dart';
 import 'dart:io';
 
-/// 简化版全局HTTP服务配置
 class HttpService {
   static HttpService? _instance;
   static Dio? _dio;
 
-  // 私有构造函数
   HttpService._();
 
-  /// 获取单例实例
   static HttpService get instance {
     _instance ??= HttpService._();
     return _instance!;
   }
 
-  /// 获取配置好的Dio实例
   static Dio get dio {
     if (_dio == null) {
       throw Exception(
-          'HttpService not initialized. Call HttpService.init() first.');
+        'HttpService not initialized. Call HttpService.init() first.',
+      );
     }
     return _dio!;
   }
 
-  /// 初始化HTTP服务
   static Future<void> init() async {
-    if (_dio != null) return; // 已经初始化过了
+    if (_dio != null) return;
 
-    // 创建Dio实例
     _dio = Dio();
 
-    // 基础配置
     _dio!.options = BaseOptions(
       connectTimeout: const Duration(seconds: 30),
       receiveTimeout: const Duration(seconds: 30),
@@ -48,37 +42,30 @@ class HttpService {
       },
     );
 
-    // 配置HTTP客户端适配器，处理SSL证书问题
     if (_dio!.httpClientAdapter is IOHttpClientAdapter) {
       (_dio!.httpClientAdapter as IOHttpClientAdapter).createHttpClient = () {
         final client = HttpClient();
 
-        // 设置更宽松的SSL配置
         client.badCertificateCallback =
             (X509Certificate cert, String host, int port) {
-          print('⚠️ SSL Certificate warning for $host:$port');
-          return true; // 在开发环境中接受所有证书
-        };
+              print('⚠️ SSL Certificate warning for $host:$port');
+              return true;
+            };
 
-        // 设置连接超时
         client.connectionTimeout = const Duration(seconds: 30);
 
-        // 设置空闲超时
         client.idleTimeout = const Duration(seconds: 30);
 
         return client;
       };
     }
 
-    // 添加拦截器
     _addInterceptors();
 
     print('HttpService initialized successfully');
   }
 
-  /// 添加拦截器
   static void _addInterceptors() {
-    // 请求拦截器
     _dio!.interceptors.add(
       InterceptorsWrapper(
         onRequest: (options, handler) {
@@ -93,9 +80,11 @@ class HttpService {
         },
         onResponse: (response, handler) {
           print(
-              '✅ Response: ${response.statusCode} ${response.requestOptions.uri}');
+            '✅ Response: ${response.statusCode} ${response.requestOptions.uri}',
+          );
           print(
-              '📥 Response Data Length: ${response.data?.toString().length ?? 0}');
+            '📥 Response Data Length: ${response.data?.toString().length ?? 0}',
+          );
           handler.next(response);
         },
         onError: (error, handler) {
@@ -103,9 +92,9 @@ class HttpService {
           print('❌ Error Message: ${error.message}');
           print('❌ Error toString: ${error.toString()}');
           print(
-              '🔗 Request: ${error.requestOptions.method} ${error.requestOptions.uri}');
+            '🔗 Request: ${error.requestOptions.method} ${error.requestOptions.uri}',
+          );
 
-          // 打印更详细的错误信息
           if (error.error != null) {
             print('❌ Underlying Error: ${error.error}');
             print('❌ Underlying Error Type: ${error.error.runtimeType}');
@@ -113,12 +102,12 @@ class HttpService {
 
           if (error.response != null) {
             print(
-                '📊 Error Response: ${error.response?.statusCode} ${error.response?.data}');
+              '📊 Error Response: ${error.response?.statusCode} ${error.response?.data}',
+            );
           } else {
             print('📊 No response received');
           }
 
-          // 检查是否是SSL证书问题
           if (error.error is HandshakeException) {
             print('🔒 SSL Handshake Error detected');
           }
@@ -128,11 +117,9 @@ class HttpService {
       ),
     );
 
-    // 重试拦截器（可选）
     _dio!.interceptors.add(
       InterceptorsWrapper(
         onError: (error, handler) async {
-          // 对于网络错误，可以实现重试逻辑
           if (error.type == DioExceptionType.connectionTimeout ||
               error.type == DioExceptionType.receiveTimeout ||
               error.type == DioExceptionType.sendTimeout) {
@@ -141,16 +128,15 @@ class HttpService {
 
             if (retryCount < 3) {
               print(
-                  '🔄 Retrying request (${retryCount + 1}/3): ${requestOptions.uri}');
+                '🔄 Retrying request (${retryCount + 1}/3): ${requestOptions.uri}',
+              );
               requestOptions.extra['retryCount'] = retryCount + 1;
 
               try {
                 final response = await _dio!.fetch(requestOptions);
                 handler.resolve(response);
                 return;
-              } catch (e) {
-                // 重试失败，继续抛出原错误
-              }
+              } catch (e) {}
             }
           }
 
@@ -160,7 +146,6 @@ class HttpService {
     );
   }
 
-  /// 创建带有自定义配置的Dio实例
   static Dio createCustomDio({
     Duration? connectTimeout,
     Duration? receiveTimeout,
@@ -173,16 +158,12 @@ class HttpService {
       connectTimeout: connectTimeout ?? const Duration(seconds: 30),
       receiveTimeout: receiveTimeout ?? const Duration(seconds: 30),
       sendTimeout: sendTimeout ?? const Duration(seconds: 30),
-      headers: {
-        ...(_dio?.options.headers ?? {}),
-        ...(headers ?? {}),
-      },
+      headers: {...(_dio?.options.headers ?? {}), ...(headers ?? {})},
     );
 
     return customDio;
   }
 
-  /// 释放资源
   static void dispose() {
     _dio?.close();
     _dio = null;
@@ -191,9 +172,7 @@ class HttpService {
   }
 }
 
-/// 便捷的HTTP请求方法
 class Http {
-  /// GET请求
   static Future<Response<T>> get<T>(
     String path, {
     Map<String, dynamic>? queryParameters,
@@ -210,7 +189,6 @@ class Http {
     );
   }
 
-  /// POST请求
   static Future<Response<T>> post<T>(
     String path, {
     dynamic data,
@@ -231,7 +209,6 @@ class Http {
     );
   }
 
-  /// PUT请求
   static Future<Response<T>> put<T>(
     String path, {
     dynamic data,
@@ -252,7 +229,6 @@ class Http {
     );
   }
 
-  /// DELETE请求
   static Future<Response<T>> delete<T>(
     String path, {
     dynamic data,

@@ -5,22 +5,22 @@ echo ===================================================
 echo ShiPlus Windows Installer Builder
 echo ===================================================
 
-:: 设置变量
+:: Configuration
 set "APP_NAME=ShiPlus"
 set "BUILD_DIR=build\windows\x64\runner\Release"
 set "OUTPUT_DIR=build\windows\installer"
 set "NSIS_SCRIPT=scripts\shiplus_installer.nsi"
 
-:: 检查参数
+:: Command-line options
 set "BUILD_APP=0"
 set "INSTALL_NSIS=0"
 
 if "%1"=="--help" (
-    echo 用法: build-installer.bat [选项]
-    echo 选项:
-    echo   --build-app    首先构建Flutter Windows应用
-    echo   --install-nsis 如果需要，安装NSIS
-    echo   --help         显示此帮助信息
+    echo Usage: build-installer.bat [options]
+    echo Options:
+    echo   --build-app    Build the Flutter Windows application first
+    echo   --install-nsis Install NSIS when it is not available
+    echo   --help         Show this help message
     exit /b 0
 )
 
@@ -36,41 +36,40 @@ if "%1"=="--install-nsis" (
     goto parse_args
 )
 
-:: 如果需要，构建Flutter Windows应用
+:: Build the Flutter Windows application when requested.
 if %BUILD_APP% EQU 1 (
-    echo 正在构建Flutter Windows应用...
-    
+    echo Building the Flutter Windows application...
+
     where flutter >nul 2>&1
     if %ERRORLEVEL% neq 0 (
-        echo 错误: 找不到Flutter。请安装Flutter并将其添加到PATH中。
+        echo Error: Flutter was not found. Install Flutter and add it to PATH.
         exit /b 1
     )
-    
+
     flutter build windows --release
     if %ERRORLEVEL% neq 0 (
-        echo Flutter构建失败。
+        echo Flutter build failed.
         exit /b 1
     )
-    
-    echo Flutter Windows应用构建成功。
+
+    echo Flutter Windows application built successfully.
     echo.
 )
 
-:: 检查Flutter构建目录是否存在
+:: Verify the Flutter build output.
 if not exist "%BUILD_DIR%" (
-    echo 错误: Flutter构建目录不存在: %BUILD_DIR%
-    echo 请先运行: build-installer.bat --build-app
+    echo Error: Flutter build directory does not exist: %BUILD_DIR%
+    echo Run this command first: build-installer.bat --build-app
     exit /b 1
 )
 
-:: 检查Flutter构建目录中的主程序是否存在
 if not exist "%BUILD_DIR%\shiplus.exe" (
-    echo 错误: Flutter应用程序可执行文件不存在: %BUILD_DIR%\shiplus.exe
-    echo 请先运行: build-installer.bat --build-app
+    echo Error: Flutter executable does not exist: %BUILD_DIR%\shiplus.exe
+    echo Run this command first: build-installer.bat --build-app
     exit /b 1
 )
 
-:: 检查NSIS是否已安装
+:: Locate NSIS.
 set "NSIS_FOUND=0"
 set "NSIS_PATH="
 
@@ -86,55 +85,55 @@ if %NSIS_FOUND% EQU 0 (
     )
 )
 
-:: 如果NSIS未安装且用户请求安装，则安装NSIS
+:: Install NSIS when requested and not already available.
 if %NSIS_FOUND% EQU 0 (
     if %INSTALL_NSIS% EQU 1 (
-        echo NSIS未安装，正在自动安装...
-        
-        powershell -ExecutionPolicy Bypass -Command "& {$nsisUrl = 'https://sourceforge.net/projects/nsis/files/NSIS%%203/3.08/nsis-3.08-setup.exe/download'; $nsisInstaller = Join-Path $env:TEMP 'nsis-setup.exe'; [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; Invoke-WebRequest -Uri $nsisUrl -OutFile $nsisInstaller; Start-Process -FilePath $nsisInstaller -ArgumentList '/S' -Wait; if (Test-Path 'C:\Program Files (x86)\NSIS\makensis.exe') { Write-Host 'NSIS安装成功' } else { Write-Host 'NSIS安装失败' }}"
-        
+        echo NSIS is not installed. Installing it now...
+
+        powershell -ExecutionPolicy Bypass -Command "& {$nsisUrl = 'https://sourceforge.net/projects/nsis/files/NSIS%%203/3.08/nsis-3.08-setup.exe/download'; $nsisInstaller = Join-Path $env:TEMP 'nsis-setup.exe'; [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; Invoke-WebRequest -Uri $nsisUrl -OutFile $nsisInstaller; Start-Process -FilePath $nsisInstaller -ArgumentList '/S' -Wait; if (Test-Path 'C:\Program Files (x86)\NSIS\makensis.exe') { Write-Host 'NSIS installed successfully' } else { Write-Host 'NSIS installation failed' }}"
+
         if exist "C:\Program Files (x86)\NSIS\makensis.exe" (
             set "NSIS_PATH=C:\Program Files (x86)\NSIS\makensis.exe"
             set "NSIS_FOUND=1"
-            echo NSIS安装成功。
+            echo NSIS installed successfully.
         ) else (
-            echo NSIS安装失败。
-            echo 请从 https://nsis.sourceforge.io/Download 手动安装NSIS。
+            echo NSIS installation failed.
+            echo Install NSIS manually from https://nsis.sourceforge.io/Download.
             exit /b 1
         )
     ) else (
-        echo 未找到NSIS。
-        echo 请安装NSIS或使用 --install-nsis 参数自动安装:
+        echo NSIS was not found.
+        echo Install NSIS or use --install-nsis:
         echo   build-installer.bat --install-nsis
-        echo 或从 https://nsis.sourceforge.io/Download 手动安装NSIS。
+        echo Alternatively, install it from https://nsis.sourceforge.io/Download.
         exit /b 1
     )
 )
 
-:: 创建输出目录
+:: Create the output directory.
 if not exist "%OUTPUT_DIR%" mkdir "%OUTPUT_DIR%"
 
-:: 运行NSIS编译器
-echo 正在使用NSIS创建安装程序...
+:: Build the NSIS installer.
+echo Creating the installer with NSIS...
 cd scripts
 "%NSIS_PATH%" shiplus_installer.nsi
 cd ..
 
-:: 检查编译结果
+:: Report the build result.
 if %ERRORLEVEL% EQU 0 (
     if exist "%OUTPUT_DIR%\%APP_NAME%_Setup.exe" (
         echo.
-        echo NSIS安装程序创建成功: %OUTPUT_DIR%\%APP_NAME%_Setup.exe
-        echo 文件大小: !%OUTPUT_DIR%\%APP_NAME%_Setup.exe:~0,10! MB
+        echo NSIS installer created: %OUTPUT_DIR%\%APP_NAME%_Setup.exe
+        echo File size: !%OUTPUT_DIR%\%APP_NAME%_Setup.exe:~0,10! MB
         echo.
     ) else (
         echo.
-        echo NSIS编译报告成功，但找不到安装程序文件。
+        echo NSIS reported success, but the installer file was not found.
         echo.
     )
 ) else (
     echo.
-    echo NSIS编译失败，错误代码: %ERRORLEVEL%
+    echo NSIS build failed with exit code: %ERRORLEVEL%
     echo.
 )
 
