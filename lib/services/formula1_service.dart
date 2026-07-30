@@ -7,6 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
 
 class Formula1Service {
+  static const String _accountLoginUrl = 'https://account.formula1.com/#/login';
   static const String _reese84Key = 'formula1_reese84_token';
   static const String _userDataKey = 'formula1_user_data';
   static const String _apiKey = 'BPhVa4xbZoebPNdxRor9rouq6gzMoPyZ';
@@ -14,6 +15,8 @@ class Formula1Service {
 
   static Future<String?> getReese84Token(BuildContext context) async {
     final Completer<String?> completer = Completer<String?>();
+    Timer? timeoutTimer;
+    var cookieLookupStarted = false;
 
     final headlessWebView = HeadlessInAppWebView(
       initialSettings: InAppWebViewSettings(
@@ -23,30 +26,24 @@ class Formula1Service {
       ),
       onWebViewCreated: (controller) {
         controller.loadUrl(
-          urlRequest: URLRequest(
-            url: WebUri("https://account.formula1.com/#/login"),
-          ),
+          urlRequest: URLRequest(url: WebUri(_accountLoginUrl)),
         );
       },
       onLoadStop: (controller, url) async {
-        await Future.delayed(const Duration(seconds: 2));
+        if (cookieLookupStarted || completer.isCompleted) return;
+        cookieLookupStarted = true;
 
         try {
-          CookieManager cookieManager = CookieManager.instance();
-          List<Cookie> cookies = await cookieManager.getCookies(
-            url: WebUri("https://account.formula1.com/#/login"),
-          );
-
-          String? reese84Token;
-          for (Cookie cookie in cookies) {
-            if (cookie.name == "reese84" && cookie.value.isNotEmpty) {
-              reese84Token = cookie.value;
-              break;
-            }
-          }
+          final reese84Token = await _waitForReese84Cookie();
 
           if (!completer.isCompleted) {
-            completer.complete(reese84Token);
+            if (reese84Token != null) {
+              completer.complete(reese84Token);
+            } else {
+              completer.completeError(
+                'Timed out waiting for the F1TV authentication token',
+              );
+            }
           }
         } catch (e) {
           if (!completer.isCompleted) {
@@ -55,22 +52,28 @@ class Formula1Service {
         }
       },
       onReceivedError: (controller, request, error) {
-        if (!completer.isCompleted) {
+        if (request.isForMainFrame == true && !completer.isCompleted) {
           completer.completeError("Failed to load page: ${error.description}");
         }
       },
     );
 
-    await headlessWebView.run();
-
-    Timer(const Duration(seconds: 30), () {
-      if (!completer.isCompleted) {
-        completer.completeError("Timeout getting reese84 token");
-        headlessWebView.dispose();
-      }
-    });
-
     try {
+      try {
+        await CookieManager.instance().deleteCookie(
+          url: WebUri(_accountLoginUrl),
+          name: 'reese84',
+        );
+      } catch (_) {
+        // Cookie cleanup is best-effort; loading the page can still refresh it.
+      }
+      await headlessWebView.run();
+      timeoutTimer = Timer(const Duration(seconds: 30), () {
+        if (!completer.isCompleted) {
+          completer.completeError('Timeout getting reese84 token');
+        }
+      });
+
       final token = await completer.future;
 
       if (token != null) {
@@ -81,8 +84,34 @@ class Formula1Service {
     } catch (e) {
       return null;
     } finally {
+      timeoutTimer?.cancel();
       headlessWebView.dispose();
     }
+  }
+
+  static Future<String?> _waitForReese84Cookie() async {
+    final cookieManager = CookieManager.instance();
+    final deadline = DateTime.now().add(const Duration(seconds: 20));
+
+    while (DateTime.now().isBefore(deadline)) {
+      try {
+        final cookies = await cookieManager.getCookies(
+          url: WebUri(_accountLoginUrl),
+        );
+
+        for (final cookie in cookies) {
+          if (cookie.name == 'reese84' && cookie.value.isNotEmpty) {
+            return cookie.value;
+          }
+        }
+      } catch (_) {
+        // The cookie store may briefly be unavailable while WebView starts.
+      }
+
+      await Future<void>.delayed(const Duration(milliseconds: 500));
+    }
+
+    return null;
   }
 
   static Future<void> _saveReese84Token(String token) async {
@@ -215,8 +244,15 @@ class Formula1Service {
       } else {
         throw Exception('Login failed: ${response}');
       }
+    } on DioException catch (e) {
+      final statusCode = e.response?.statusCode;
+      final details = e.response?.data ?? e.message;
+      throw Exception(
+        'F1TV login request failed'
+        '${statusCode == null ? '' : ' ($statusCode)'}: $details',
+      );
     } catch (e) {
-      return null;
+      throw Exception('F1TV login failed: $e');
     }
   }
 

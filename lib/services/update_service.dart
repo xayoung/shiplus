@@ -22,7 +22,7 @@ class UpdateService {
       'https://api.github.com/repos/xayoung/shiplus/releases/latest';
   static const currentAppVersion = String.fromEnvironment(
     'SHIPLUS_VERSION',
-    defaultValue: '1.1.3',
+    defaultValue: '1.1.4',
   );
 
   final Dio _dio;
