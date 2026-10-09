@@ -85,6 +85,8 @@ class _WeekendPageState extends State<WeekendPage> {
         options: Options(headers: {'Content-Type': 'application/json'}),
       );
 
+      if (!mounted) return;
+
       if (response.statusCode == 200) {
         final data = response.data;
 
@@ -138,6 +140,7 @@ class _WeekendPageState extends State<WeekendPage> {
         });
       }
     } catch (e) {
+      if (!mounted) return;
       setState(() {
         _error = e.toString();
         _isLoading = false;
@@ -159,6 +162,18 @@ class _WeekendPageState extends State<WeekendPage> {
           onPressed: () => NavigationHelper.popPageInCurrentTab(context),
         ),
         title: Text('Content', style: theme.textTheme.h4),
+        actions: [
+          Padding(
+            padding: const EdgeInsets.only(right: 16),
+            child: Tooltip(
+              message: 'Refresh',
+              child: ShadIconButton.outline(
+                onPressed: _isLoading ? null : _fetchWeekendData,
+                icon: const Icon(LucideIcons.refreshCw, size: 17),
+              ),
+            ),
+          ),
+        ],
       ),
       body: _buildContent(),
     );

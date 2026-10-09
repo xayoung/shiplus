@@ -5,6 +5,7 @@ import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:dio/dio.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
+import 'formula1_login_diagnostics.dart';
 
 class Formula1Service {
   static const String _accountLoginUrl = 'https://account.formula1.com/#/login';
@@ -13,17 +14,21 @@ class Formula1Service {
   static const String _apiKey = 'BPhVa4xbZoebPNdxRor9rouq6gzMoPyZ';
   static const String _systemId = '60a9ad84-e93d-480f-80d6-af37494f2e22';
 
-  static Future<String?> getReese84Token(BuildContext context) async {
+  static String? _challengeUserAgent;
+
+  static Future<String?> getReese84Token(BuildContext context) =>
+      _prepareChallenge();
+
+  static Future<String?> _prepareChallenge() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_reese84Key);
+    _challengeUserAgent = null;
     final Completer<String?> completer = Completer<String?>();
     Timer? timeoutTimer;
     var cookieLookupStarted = false;
 
     final headlessWebView = HeadlessInAppWebView(
-      initialSettings: InAppWebViewSettings(
-        javaScriptEnabled: true,
-        userAgent:
-            'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-      ),
+      initialSettings: InAppWebViewSettings(javaScriptEnabled: true),
       onWebViewCreated: (controller) {
         controller.loadUrl(
           urlRequest: URLRequest(url: WebUri(_accountLoginUrl)),
@@ -34,6 +39,12 @@ class Formula1Service {
         cookieLookupStarted = true;
 
         try {
+          final userAgent = await controller.evaluateJavascript(
+            source: 'navigator.userAgent',
+          );
+          if (userAgent is String && userAgent.isNotEmpty) {
+            _challengeUserAgent = userAgent;
+          }
           final reese84Token = await _waitForReese84Cookie();
 
           if (!completer.isCompleted) {
@@ -59,13 +70,19 @@ class Formula1Service {
     );
 
     try {
-      try {
+      // The challenge can be set on the parent domain, not just account.
+      // Deleting only the default host cookie can leave a stale token behind.
+      for (final domain in [
+        '.formula1.com',
+        'formula1.com',
+        'account.formula1.com',
+        '.account.formula1.com',
+      ]) {
         await CookieManager.instance().deleteCookie(
           url: WebUri(_accountLoginUrl),
           name: 'reese84',
+          domain: domain,
         );
-      } catch (_) {
-        // Cookie cleanup is best-effort; loading the page can still refresh it.
       }
       await headlessWebView.run();
       timeoutTimer = Timer(const Duration(seconds: 30), () {
@@ -85,7 +102,7 @@ class Formula1Service {
       return null;
     } finally {
       timeoutTimer?.cancel();
-      headlessWebView.dispose();
+      await headlessWebView.dispose();
     }
   }
 
@@ -143,43 +160,94 @@ class Formula1Service {
 
   static Future<Map<String, dynamic>?> login(
     String email,
-    String password,
-  ) async {
+    String password, {
+    Dio? client,
+    Future<String?> Function()? prepareChallenge,
+  }) async {
     try {
-      final reese84Token = await getSavedReese84Token();
-      if (reese84Token == null) {
+      var reese84Token = await getSavedReese84Token();
+      if (reese84Token == null || reese84Token.isEmpty) {
         throw Exception('No authentication token available');
       }
 
-      var uuid = const Uuid().v1();
+      final uuid = const Uuid().v4();
 
-      final dio = Dio();
+      final dio = client ?? Dio();
+      Future<Response<dynamic>> register() async {
+        debugPrint('[F1TV login] RegisterDevice request started');
+        try {
+          final response = await dio.post(
+            'https://api.formula1.com/v1/account/Subscriber/RegisterDevice',
+            data: {
+              'Login': email,
+              'Password': password,
+              'Nickname': 'shiplus',
+              'PhysicalDevice': {
+                'DeviceTypeCode': 12,
+                'DeviceId': '$uuid-tvOS',
+                'PhysicalDeviceTypeCode': 1002,
+              },
+            },
+            options: Options(
+              headers: {
+                'X-D-Token': reese84Token,
+                if (_challengeUserAgent != null)
+                  'User-Agent': _challengeUserAgent,
+                'apikey': _apiKey,
+                'CD-SystemID': _systemId,
+                'Content-Type': 'application/json',
+              },
+            ),
+          );
 
-      final response = await dio.post(
-        'https://api.formula1.com/v1/account/Subscriber/RegisterDevice',
-        data: {
-          'Login': email,
-          'Password': password,
-          'Nickname': 'shiplus',
-          'PhysicalDevice': {
-            'DeviceTypeCode': 12,
-            'DeviceId': '$uuid-tvOS',
-            'PhysicalDeviceTypeCode': 1002,
-          },
-        },
-        options: Options(
-          headers: {
-            'X-D-Token': reese84Token,
-            'apikey': _apiKey,
-            'CD-SystemID': _systemId,
-            'Content-Type': 'application/json',
-          },
-        ),
-      );
+          debugPrint(
+            Formula1LoginDiagnostics.describe(
+              response.statusCode,
+              response.data,
+              contentType: response.headers.value('content-type'),
+            ),
+          );
+          return response;
+        } on DioException catch (e) {
+          debugPrint(
+            Formula1LoginDiagnostics.describe(
+              e.response?.statusCode,
+              e.response?.data,
+              contentType: e.response?.headers.value('content-type'),
+            ),
+          );
+          debugPrint('[F1TV login] Transport error: ${e.type.name}');
+          rethrow;
+        }
+      }
 
-      if (response.statusCode == 200 && response.data['data'] != null) {
-        final responseData = response.data;
+      late final Response<dynamic> response;
+      try {
+        response = await register();
+      } on DioException catch (e) {
+        if (e.response?.statusCode != 403) rethrow;
+        debugPrint('[F1TV login] HTTP 403; renewing browser challenge once');
+        // Refresh the challenge once; keep the device ID stable for the retry.
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.remove(_reese84Key);
+        reese84Token = await (prepareChallenge ?? _prepareChallenge)();
+        if (reese84Token == null || reese84Token.isEmpty) {
+          throw Exception(
+            'F1TV rejected sign-in (403) and browser verification could not '
+            'be renewed. Please try signing in again.',
+          );
+        }
+        response = await register();
+      }
 
+      final responseData = Formula1LoginDiagnostics.decodeBody(response.data);
+      final status = response.statusCode ?? 0;
+      if (status >= 200 &&
+          status < 300 &&
+          responseData is Map<String, dynamic> &&
+          responseData['data'] is Map &&
+          responseData['data']['subscriptionToken'] is String &&
+          (responseData['data']['subscriptionToken'] as String).isNotEmpty) {
         final Map<String, dynamic> userData = {'rawResponse': responseData};
 
         if (responseData['PhysicalDevice'] != null) {
@@ -237,19 +305,26 @@ class Formula1Service {
         }
 
         _currentUserData = userData;
-        print('currentUserData: $_currentUserData');
 
         await _saveUserData(userData);
         return userData;
       } else {
-        throw Exception('Login failed: ${response}');
+        debugPrint(
+          '[F1TV login] Response rejected: expected a successful '
+          'JSON object with a non-empty data.subscriptionToken. '
+          'No account data was saved.',
+        );
+        throw Exception(
+          'Invalid F1TV login response (HTTP $status). '
+          'See the [F1TV login] console log for response diagnostics',
+        );
       }
     } on DioException catch (e) {
       final statusCode = e.response?.statusCode;
-      final details = e.response?.data ?? e.message;
       throw Exception(
         'F1TV login request failed'
-        '${statusCode == null ? '' : ' ($statusCode)'}: $details',
+        '${statusCode == null ? '' : ' ($statusCode)'}.'
+        '${statusCode == 403 ? ' Sign-in was rejected after renewed browser verification. Please try again or check your network.' : ''}',
       );
     } catch (e) {
       throw Exception('F1TV login failed: $e');
