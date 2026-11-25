@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 import 'package:dio/dio.dart';
+import 'package:uuid/uuid.dart';
 import 'dart:io';
 import 'package:path/path.dart' as path;
 import 'main_layout.dart';
@@ -25,6 +26,7 @@ class _PlayDetailPageState extends State<PlayDetailPage> {
   bool _isLoading = true;
   String? _error;
   Dio? dio;
+  final String _playbackSessionId = const Uuid().v4();
 
   @override
   void initState() {
@@ -54,40 +56,50 @@ class _PlayDetailPageState extends State<PlayDetailPage> {
           duration: const Duration(seconds: 2),
         ),
       );
-      final token =
-          await Formula1Service.currentUserData!['data']['subscriptionToken'];
+      final token = await Formula1Service.getValidSubscriptionToken();
+      if (token == null || token.isEmpty) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Need Logged in F1TV. 「 Settings - Login to F1TV 」'),
+              duration: Duration(seconds: 3),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+        return;
+      }
       await _fetchStreamData(playbackUrl, token, title);
     } catch (e) {
-      // print('Token request exception: $e');
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Need Logged in F1TV. 「 Settings - Login to F1TV 」'),
-          duration: const Duration(seconds: 3),
-          backgroundColor: Colors.red,
-        ),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Need Logged in F1TV. 「 Settings - Login to F1TV 」'),
+            duration: Duration(seconds: 3),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
     }
   }
 
   Future<void> _fetchStreamData(
     String playbackUrl,
     String token,
-    String title,
-  ) async {
+    String title, {
+    bool hasRetried = false,
+  }) async {
     try {
       final url =
           'https://f1tv.formula1.com/2.0/R/ENG/BIG_SCREEN_HLS/ALL/$playbackUrl&player=player_bm';
       const deviceInfo =
           'device=tvos;screen=bigscreen;os=tvos;model=appletv14.1;osVersion=16.4;appVersion=2.31.0;playerVersion=3.65.0';
-      // final url =
-      //     'https://f1tv.formula1.com/2.0/R/ENG/WEB_HLS/ALL/$playbackUrl&player=player_bm';
-      // final deviceInfo =
-      //     'device=web;screen=browser;os=mac os;browser=chrome;browserVersion=137.0.0.0;model=Macintosh;osVersion=14.6.1;appVersion=release-R43.0.1;playerVersion=8.212.0';
 
       print('Requesting streaming data: $url');
       if (dio == null) {
         throw Exception('Network client not initialized');
       }
+      final accountSessionId = Formula1Service.currentSessionId;
       final response = await dio!.get(
         url,
         options: Options(
@@ -106,6 +118,9 @@ class _PlayDetailPageState extends State<PlayDetailPage> {
             'sec-ch-ua-mobile': '?0',
             'sec-ch-ua-platform': '"macOS"',
             'priority': 'u=1, i',
+            'sessionid': _playbackSessionId,
+            if (accountSessionId != null && accountSessionId.isNotEmpty)
+              'entitlementtoken': accountSessionId,
             'ascendonToken': token,
             'x-f1-device-info': deviceInfo,
           },
@@ -114,7 +129,6 @@ class _PlayDetailPageState extends State<PlayDetailPage> {
 
       if (response.statusCode == 200) {
         print('Streaming data retrieved successfully');
-        print('Response: ${response.data}');
         final responseData = response.data;
         try {
           final streamUrl = responseData['resultObj']?['url']?.toString();
@@ -138,7 +152,7 @@ class _PlayDetailPageState extends State<PlayDetailPage> {
             final msg = responseData['message']?.toString();
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
-                content: Text(msg!),
+                content: Text(msg ?? 'Failed to load stream URL'),
                 duration: const Duration(seconds: 5),
               ),
             );
@@ -154,7 +168,6 @@ class _PlayDetailPageState extends State<PlayDetailPage> {
         }
       } else {
         print('Streaming data request failed: ${response.statusCode}');
-        print('Response: ${response.data}');
 
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -171,28 +184,52 @@ class _PlayDetailPageState extends State<PlayDetailPage> {
         // Server returned error
         final statusCode = e.response!.statusCode;
         final errorData = e.response!.data;
-        print('Status code: $statusCode, Error data: $errorData');
-        if (statusCode == 401) {
+        print('Status code: $statusCode');
+        if (statusCode == 401 && !hasRetried) {
           final refreshedData = await Formula1Service.refreshToken();
-          final refresToken = refreshedData!['data']['subscriptionToken'];
-          await _fetchStreamData(playbackUrl, refresToken, title);
+          final refreshedToken =
+              refreshedData?['data']?['subscriptionToken'] as String?;
+          if (refreshedToken != null && refreshedToken.isNotEmpty) {
+            await _fetchStreamData(
+              playbackUrl,
+              refreshedToken,
+              title,
+              hasRetried: true,
+            );
+            return;
+          }
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text(
+                  'F1TV session expired. Please sign in again in Settings.',
+                ),
+                duration: Duration(seconds: 3),
+                backgroundColor: Colors.red,
+              ),
+            );
+          }
         } else {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Failed to get streaming data: $errorData'),
-              duration: const Duration(seconds: 2),
-            ),
-          );
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Failed to get streaming data: $errorData'),
+                duration: const Duration(seconds: 2),
+              ),
+            );
+          }
         }
       } else {
         // Other errors
         print('Unknown error: $e');
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed to get streaming data: $e'),
-            duration: const Duration(seconds: 2),
-          ),
-        );
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Failed to get streaming data: $e'),
+              duration: const Duration(seconds: 2),
+            ),
+          );
+        }
       }
     }
   }

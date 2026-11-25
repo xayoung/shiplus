@@ -3,6 +3,7 @@ import 'package:shadcn_ui/shadcn_ui.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'ui/shiplus_ui.dart';
+import 'f1_login_dialog.dart';
 import '../services/download_service.dart';
 import '../services/n_m3u8dl_config_service.dart';
 import '../services/formula1_service.dart';
@@ -20,13 +21,10 @@ class SettingsPage extends StatefulWidget {
 class _SettingsPageState extends State<SettingsPage> {
   final _updateService = UpdateService();
   final _pathController = TextEditingController();
-  final _emailController = TextEditingController();
-  final _passwordController = TextEditingController();
   final _proxyUrlController = TextEditingController();
   String _currentPath = '';
 
   // Formula 1 data
-  String? _reese84Token;
   Map<String, dynamic>? _formula1UserData;
   bool _isLoadingF1Data = false;
 
@@ -328,15 +326,15 @@ class _SettingsPageState extends State<SettingsPage> {
         _isLoadingF1Data = true;
       });
 
-      _reese84Token = await Formula1Service.getSavedReese84Token();
-
       _formula1UserData = await Formula1Service.getSavedUserData();
 
+      if (!mounted) return;
       setState(() {
         _isLoadingF1Data = false;
       });
     } catch (e) {
       print('Error loading Formula 1 data: $e');
+      if (!mounted) return;
       setState(() {
         _isLoadingF1Data = false;
       });
@@ -508,129 +506,32 @@ class _SettingsPageState extends State<SettingsPage> {
     );
   }
 
-  void _showLoginDialog() {
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (BuildContext dialogContext) {
-        return AlertDialog(
-          title: const Text('Formula 1 Account'),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Text('Enter your Formula 1 account credentials:'),
-                const SizedBox(height: 16),
-                TextField(
-                  controller: _emailController,
-                  decoration: const InputDecoration(
-                    labelText: 'Email',
-                    hintText: 'Enter email',
-                    prefixIcon: Icon(Icons.email),
-                  ),
-                  keyboardType: TextInputType.emailAddress,
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: _passwordController,
-                  decoration: const InputDecoration(
-                    labelText: 'Password',
-                    hintText: 'Enter password',
-                    prefixIcon: Icon(Icons.lock),
-                  ),
-                  obscureText: true,
-                ),
-              ],
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () {
-                Navigator.of(dialogContext).pop();
-              },
-              child: const Text('Cancel'),
-            ),
-            ElevatedButton(
-              onPressed: () async {
-                if (_emailController.text.isEmpty ||
-                    _passwordController.text.isEmpty) {
-                  _showErrorSnackBar('Please enter both email and password');
-                  return;
-                }
+  Future<void> _openF1LoginDialog() async {
+    if (_isLoadingF1Data) return;
+    setState(() {
+      _isLoadingF1Data = true;
+    });
 
-                Navigator.of(dialogContext).pop();
-                setState(() {
-                  _isLoadingF1Data = true;
-                });
-
-                BuildContext? loadingDialogContext;
-                showDialog(
-                  context: context,
-                  barrierDismissible: false,
-                  builder: (BuildContext ctx) {
-                    loadingDialogContext = ctx;
-                    return WillPopScope(
-                      onWillPop: () async => false,
-                      child: const AlertDialog(
-                        content: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            CircularProgressIndicator(),
-                            SizedBox(height: 16),
-                            Text('Logging in to Formula 1...'),
-                          ],
-                        ),
-                      ),
-                    );
-                  },
-                );
-
-                try {
-                  final userData = await Formula1Service.login(
-                    _emailController.text,
-                    _passwordController.text,
-                  );
-                  WidgetsBinding.instance.addPostFrameCallback((_) {
-                    if (loadingDialogContext != null &&
-                        Navigator.canPop(loadingDialogContext!)) {
-                      Navigator.of(loadingDialogContext!).pop();
-                    }
-
-                    setState(() {
-                      _isLoadingF1Data = false;
-                      if (userData != null) {
-                        _formula1UserData = userData;
-                        _showSuccessSnackBar(
-                          'Successfully logged in to Formula 1',
-                        );
-                      } else {
-                        _showErrorSnackBar(
-                          'Failed to login. Please check your credentials.',
-                        );
-                      }
-                    });
-                  });
-                } catch (e) {
-                  WidgetsBinding.instance.addPostFrameCallback((_) {
-                    if (loadingDialogContext != null &&
-                        Navigator.canPop(loadingDialogContext!)) {
-                      Navigator.of(loadingDialogContext!).pop();
-                    }
-
-                    setState(() {
-                      _isLoadingF1Data = false;
-                    });
-
-                    _showErrorSnackBar('Login error: $e');
-                  });
-                }
-              },
-              child: const Text('Login'),
-            ),
-          ],
-        );
-      },
-    );
+    try {
+      final userData = await showDialog<Map<String, dynamic>>(
+        context: context,
+        barrierDismissible: false,
+        builder: (BuildContext context) => const F1LoginDialog(),
+      );
+      if (!mounted) return;
+      if (userData != null) {
+        setState(() {
+          _formula1UserData = userData;
+        });
+        _showSuccessSnackBar('Successfully logged in to Formula 1');
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoadingF1Data = false;
+        });
+      }
+    }
   }
 
   @override
@@ -694,169 +595,192 @@ class _SettingsPageState extends State<SettingsPage> {
                     ),
                     const SizedBox(height: 16),
                     if (_formula1UserData != null) ...[
-                      Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          color: Colors.grey[50],
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: Colors.grey[300]!),
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              children: [
-                                const Icon(
-                                  Icons.person,
-                                  size: 16,
-                                  color: Colors.blue,
-                                ),
-                                const SizedBox(width: 8),
-                                Expanded(
-                                  child: Text(
-                                    'Email: ${_formula1UserData!['Email'] ?? 'Unknown'}',
-                                    style: const TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 8),
-                            if (_formula1UserData!['FirstName'] != null &&
-                                _formula1UserData!['LastName'] != null) ...[
-                              Row(
-                                children: [
-                                  const Icon(
-                                    Icons.badge,
-                                    size: 16,
-                                    color: Colors.blue,
-                                  ),
-                                  const SizedBox(width: 8),
-                                  Text(
-                                    'Name: ${_formula1UserData!['FirstName']} ${_formula1UserData!['LastName']}',
-                                  ),
-                                ],
+                      Builder(
+                        builder: (context) {
+                          final shad = ShadTheme.of(context);
+                          final email =
+                              _formula1UserData!['Email']?.toString() ?? '';
+                          final firstName =
+                              _formula1UserData!['FirstName']?.toString() ?? '';
+                          final lastName =
+                              _formula1UserData!['LastName']?.toString() ?? '';
+                          final fullName = [
+                            firstName,
+                            lastName,
+                          ].where((part) => part.isNotEmpty).join(' ');
+                          final homeCountry =
+                              _formula1UserData!['HomeCountry']?.toString() ??
+                              '';
+                          return Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.all(16),
+                            decoration: BoxDecoration(
+                              color: shad.colorScheme.muted,
+                              borderRadius: shad.radius,
+                              border: Border.all(
+                                color: shad.colorScheme.border,
                               ),
-                              const SizedBox(height: 4),
-                            ],
-                            Row(
-                              children: [
-                                const Icon(
-                                  Icons.numbers,
-                                  size: 16,
-                                  color: Colors.blue,
-                                ),
-                                const SizedBox(width: 8),
-                                Text(
-                                  'User ID: ${_formula1UserData!['SubscriberId'] ?? 'Unknown'}',
-                                ),
-                              ],
                             ),
-                            const SizedBox(height: 4),
-                            Row(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                const Icon(
-                                  Icons.public,
-                                  size: 16,
-                                  color: Colors.blue,
-                                ),
-                                const SizedBox(width: 8),
-                                Text(
-                                  'Country: ${_formula1UserData!['HomeCountry'] ?? 'Unknown'}',
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 4),
-                            Row(
-                              children: [
-                                Icon(
-                                  _getSubscriptionStatus().toLowerCase() ==
-                                          'active'
-                                      ? Icons.check_circle
-                                      : Icons.cancel,
-                                  size: 16,
-                                  color:
-                                      _getSubscriptionStatus().toLowerCase() ==
-                                          'active'
-                                      ? Colors.green
-                                      : Colors.red,
-                                ),
-                                const SizedBox(width: 8),
-                                Text('Status: ${_getSubscriptionStatus()}'),
-                              ],
-                            ),
-                            const SizedBox(height: 4),
-                            if (_formula1UserData!['SubscriptionInfo'] !=
-                                null) ...[
-                              const Divider(height: 16),
-                              const SizedBox(height: 4),
-                              Row(
-                                children: [
-                                  const Icon(
-                                    Icons.card_membership,
-                                    size: 16,
-                                    color: Colors.blue,
-                                  ),
-                                  const SizedBox(width: 8),
-                                  const Text(
-                                    'Subscription Information:',
-                                    style: TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 4),
-                              Padding(
-                                padding: const EdgeInsets.only(left: 24),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text('Type: ${_getSubscriptionType()}'),
-                                    if (_formula1UserData!['SubscriptionInfo']['IsAutoRenewing'] !=
-                                        null)
-                                      Text(
-                                        'Auto-renewing: ${_formula1UserData!['SubscriptionInfo']['IsAutoRenewing'] ? 'Yes' : 'No'}',
+                                if (email.isNotEmpty) ...[
+                                  Row(
+                                    children: [
+                                      const Icon(
+                                        Icons.person,
+                                        size: 16,
+                                        color: Colors.blue,
                                       ),
+                                      const SizedBox(width: 8),
+                                      Expanded(
+                                        child: Text(
+                                          'Email: $email',
+                                          style: const TextStyle(
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 8),
+                                ],
+                                if (fullName.isNotEmpty) ...[
+                                  Row(
+                                    children: [
+                                      const Icon(
+                                        Icons.badge,
+                                        size: 16,
+                                        color: Colors.blue,
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Text('Name: $fullName'),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 4),
+                                ],
+                                Row(
+                                  children: [
+                                    const Icon(
+                                      Icons.numbers,
+                                      size: 16,
+                                      color: Colors.blue,
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Text(
+                                      'User ID: ${_formula1UserData!['SubscriberId'] ?? 'Unknown'}',
+                                    ),
                                   ],
                                 ),
-                              ),
-                            ],
-                            if (_formula1UserData!['Entitlements'] != null &&
-                                _formula1UserData!['Entitlements'] is List &&
-                                (_formula1UserData!['Entitlements'] as List)
-                                    .isNotEmpty) ...[
-                              const Divider(height: 16),
-                              const SizedBox(height: 4),
-                              Row(
-                                children: [
-                                  const Icon(
-                                    Icons.verified_user,
-                                    size: 16,
-                                    color: Colors.blue,
+                                if (homeCountry.isNotEmpty) ...[
+                                  const SizedBox(height: 4),
+                                  Row(
+                                    children: [
+                                      const Icon(
+                                        Icons.public,
+                                        size: 16,
+                                        color: Colors.blue,
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Text('Country: $homeCountry'),
+                                    ],
                                   ),
-                                  const SizedBox(width: 8),
-                                  const Text(
-                                    'Entitlements:',
-                                    style: TextStyle(
-                                      fontWeight: FontWeight.bold,
+                                ],
+                                const SizedBox(height: 4),
+                                Row(
+                                  children: [
+                                    Icon(
+                                      _getSubscriptionStatus().toLowerCase() ==
+                                              'active'
+                                          ? Icons.check_circle
+                                          : Icons.cancel,
+                                      size: 16,
+                                      color:
+                                          _getSubscriptionStatus()
+                                                  .toLowerCase() ==
+                                              'active'
+                                          ? Colors.green
+                                          : Colors.red,
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Text('Status: ${_getSubscriptionStatus()}'),
+                                  ],
+                                ),
+                                if (_formula1UserData!['SubscriptionInfo'] !=
+                                    null) ...[
+                                  const Divider(height: 16),
+                                  const SizedBox(height: 4),
+                                  Row(
+                                    children: [
+                                      const Icon(
+                                        Icons.card_membership,
+                                        size: 16,
+                                        color: Colors.blue,
+                                      ),
+                                      const SizedBox(width: 8),
+                                      const Text(
+                                        'Subscription Information:',
+                                        style: TextStyle(
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Padding(
+                                    padding: const EdgeInsets.only(left: 24),
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Text('Type: ${_getSubscriptionType()}'),
+                                        if (_formula1UserData!['SubscriptionInfo']['IsAutoRenewing'] !=
+                                            null)
+                                          Text(
+                                            'Auto-renewing: ${_formula1UserData!['SubscriptionInfo']['IsAutoRenewing'] ? 'Yes' : 'No'}',
+                                          ),
+                                      ],
                                     ),
                                   ),
                                 ],
-                              ),
-                              const SizedBox(height: 4),
-                              Padding(
-                                padding: const EdgeInsets.only(left: 24),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: _buildEntitlementsList(),
-                                ),
-                              ),
-                            ],
-                          ],
-                        ),
+                                if (_formula1UserData!['Entitlements'] !=
+                                        null &&
+                                    _formula1UserData!['Entitlements']
+                                        is List &&
+                                    (_formula1UserData!['Entitlements'] as List)
+                                        .isNotEmpty) ...[
+                                  const Divider(height: 16),
+                                  const SizedBox(height: 4),
+                                  Row(
+                                    children: [
+                                      const Icon(
+                                        Icons.verified_user,
+                                        size: 16,
+                                        color: Colors.blue,
+                                      ),
+                                      const SizedBox(width: 8),
+                                      const Text(
+                                        'Entitlements:',
+                                        style: TextStyle(
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Padding(
+                                    padding: const EdgeInsets.only(left: 24),
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: _buildEntitlementsList(),
+                                    ),
+                                  ),
+                                ],
+                              ],
+                            ),
+                          );
+                        },
                       ),
                       const SizedBox(height: 16),
                       Row(
@@ -889,7 +813,9 @@ class _SettingsPageState extends State<SettingsPage> {
                                 try {
                                   final refreshedData =
                                       await Formula1Service.refreshToken();
+                                  if (!mounted) return;
                                   if (dialogContext != null &&
+                                      dialogContext!.mounted &&
                                       Navigator.canPop(dialogContext!)) {
                                     Navigator.of(dialogContext!).pop();
                                   }
@@ -902,13 +828,19 @@ class _SettingsPageState extends State<SettingsPage> {
                                         'Token refreshed successfully',
                                       );
                                     } else {
+                                      _formula1UserData =
+                                          Formula1Service.currentUserData;
                                       _showErrorSnackBar(
-                                        'Failed to refresh token',
+                                        _formula1UserData == null
+                                            ? 'Session expired. Please login to F1TV again.'
+                                            : 'Failed to refresh token',
                                       );
                                     }
                                   });
                                 } catch (e) {
+                                  if (!mounted) return;
                                   if (dialogContext != null &&
+                                      dialogContext!.mounted &&
                                       Navigator.canPop(dialogContext!)) {
                                     Navigator.of(dialogContext!).pop();
                                   }
@@ -939,8 +871,8 @@ class _SettingsPageState extends State<SettingsPage> {
                             child: OutlinedButton.icon(
                               onPressed: () async {
                                 await Formula1Service.clearAllData();
+                                if (!mounted) return;
                                 setState(() {
-                                  _reese84Token = null;
                                   _formula1UserData = null;
                                 });
                                 _showSuccessSnackBar(
@@ -964,88 +896,19 @@ class _SettingsPageState extends State<SettingsPage> {
                     ] else ...[
                       SizedBox(
                         width: double.infinity,
-                        child: ElevatedButton.icon(
-                          onPressed: _isLoadingF1Data
-                              ? null
-                              : () async {
-                                  BuildContext? dialogContext;
-                                  showDialog(
-                                    context: context,
-                                    barrierDismissible: false,
-                                    builder: (BuildContext ctx) {
-                                      dialogContext = ctx;
-                                      return const AlertDialog(
-                                        content: Column(
-                                          mainAxisSize: MainAxisSize.min,
-                                          children: [
-                                            CircularProgressIndicator(),
-                                            SizedBox(height: 16),
-                                            Text(
-                                              'Getting authentication token...',
-                                            ),
-                                          ],
-                                        ),
-                                      );
-                                    },
-                                  );
-
-                                  setState(() {
-                                    _isLoadingF1Data = true;
-                                  });
-
-                                  try {
-                                    final token =
-                                        await Formula1Service.getReese84Token(
-                                          context,
-                                        );
-
-                                    if (dialogContext != null &&
-                                        Navigator.canPop(dialogContext!)) {
-                                      Navigator.of(dialogContext!).pop();
-                                    }
-
-                                    if (token != null) {
-                                      _reese84Token = token;
-                                      _showLoginDialog();
-                                    } else {
-                                      _showErrorSnackBar(
-                                        'Failed to get authentication token',
-                                      );
-                                    }
-                                  } catch (e) {
-                                    if (dialogContext != null &&
-                                        Navigator.canPop(dialogContext!)) {
-                                      Navigator.of(dialogContext!).pop();
-                                    }
-                                    _showErrorSnackBar('Error: $e');
-                                  } finally {
-                                    setState(() {
-                                      _isLoadingF1Data = false;
-                                    });
-                                  }
-                                },
-                          icon: _isLoadingF1Data
-                              ? const SizedBox(
-                                  width: 20,
-                                  height: 20,
+                        child: ShadButton(
+                          enabled: !_isLoadingF1Data,
+                          onPressed: _openF1LoginDialog,
+                          leading: _isLoadingF1Data
+                              ? const SizedBox.square(
+                                  dimension: 16,
                                   child: CircularProgressIndicator(
                                     strokeWidth: 2,
-                                    valueColor: AlwaysStoppedAnimation<Color>(
-                                      Colors.white,
-                                    ),
                                   ),
                                 )
-                              : const Icon(Icons.login, size: 20),
-                          label: Text(
+                              : const Icon(Icons.login, size: 18),
+                          child: Text(
                             _isLoadingF1Data ? 'Loading...' : 'Login to F1TV',
-                          ),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Theme.of(context).primaryColor,
-                            foregroundColor: Colors.white,
-                            padding: const EdgeInsets.symmetric(vertical: 16),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(8),
-                            ),
                           ),
                         ),
                       ),
@@ -1563,8 +1426,7 @@ class _SettingsPageState extends State<SettingsPage> {
   @override
   void dispose() {
     _pathController.dispose();
-    _emailController.dispose();
-    _passwordController.dispose();
+    _proxyUrlController.dispose();
     super.dispose();
   }
 }

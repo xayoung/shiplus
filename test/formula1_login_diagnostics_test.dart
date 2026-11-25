@@ -57,4 +57,29 @@ void main() {
       contains('body=empty'),
     );
   });
+
+  test('OAuth responses retain error codes and hide tokens and device codes', () {
+    final pendingLog = Formula1LoginDiagnostics.describe(400, {
+      'error': 'authorization_pending',
+      'error_description': 'Waiting for user code ABCD-EFGH',
+    });
+    expect(pendingLog, contains('"error":"authorization_pending"'));
+    expect(pendingLog, isNot(contains('ABCD-EFGH')));
+
+    final tokenLog = Formula1LoginDiagnostics.describe(200, {
+      'access_token': 'jwt-access-secret',
+      'refresh_token': 'jwt-refresh-secret',
+      'device_code': 'device-code-secret',
+      'token_type': 'Bearer',
+      'expires_in': 3600,
+    });
+    expect(tokenLog, contains('HTTP 200'));
+    for (final secret in [
+      'jwt-access-secret',
+      'jwt-refresh-secret',
+      'device-code-secret',
+    ]) {
+      expect(tokenLog, isNot(contains(secret)));
+    }
+  });
 }

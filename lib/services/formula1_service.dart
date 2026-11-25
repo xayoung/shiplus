@@ -1,334 +1,891 @@
 import 'dart:async';
 import 'dart:convert';
-import 'package:flutter/material.dart';
-import 'package:flutter_inappwebview/flutter_inappwebview.dart';
+import 'dart:math' as math;
+
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:uuid/uuid.dart';
+
+import '../utils/dio_helper.dart';
 import 'formula1_login_diagnostics.dart';
 
+enum DeviceSignInErrorType {
+  expired,
+  denied,
+  invalidResponse,
+  unavailable,
+  rejected,
+  cancelled,
+}
+
+class DeviceSignInException implements Exception {
+  const DeviceSignInException(this.type, this.message, {this.statusCode});
+
+  final DeviceSignInErrorType type;
+  final String message;
+  final int? statusCode;
+
+  @override
+  String toString() => message;
+}
+
+class DeviceAuthorization {
+  const DeviceAuthorization({
+    required this.deviceCode,
+    required this.userCode,
+    required this.verificationUri,
+    required this.verificationUriComplete,
+    required this.expiresAt,
+    required this.intervalSeconds,
+    required this.attemptId,
+  });
+
+  final String deviceCode;
+  final String userCode;
+  final Uri verificationUri;
+  final Uri verificationUriComplete;
+  final DateTime expiresAt;
+  final double intervalSeconds;
+  final int attemptId;
+
+  bool get hasPrefilledUserCode =>
+      verificationUriComplete.queryParameters['user_code'] == userCode;
+}
+
+class DeviceAccountSession {
+  const DeviceAccountSession({
+    required this.refreshToken,
+    required this.expiresAt,
+    required this.playbackExpiresAt,
+    required this.sessionId,
+    required this.subscriptionToken,
+    required this.userData,
+  });
+
+  final String refreshToken;
+  final DateTime expiresAt;
+  final DateTime playbackExpiresAt;
+  final String sessionId;
+  final String subscriptionToken;
+  final Map<String, dynamic> userData;
+
+  static Map<String, dynamic>? decodeJwtClaims(String token) {
+    final parts = token.split('.');
+    if (parts.length != 3 || parts[0].isEmpty || parts[2].isEmpty) {
+      return null;
+    }
+    try {
+      final normalized = base64Url.normalize(parts[1]);
+      final decoded = utf8.decode(base64Url.decode(normalized));
+      final parsed = jsonDecode(decoded);
+      if (parsed is Map) {
+        return Map<String, dynamic>.from(parsed);
+      }
+    } catch (_) {
+      return null;
+    }
+    return null;
+  }
+
+  static DeviceAccountSession decode(
+    dynamic body, {
+    DeviceAccountSession? previous,
+    DateTime? now,
+  }) {
+    final currentTime = (now ?? DateTime.now()).toUtc();
+    final decoded = Formula1LoginDiagnostics.decodeBody(body);
+    if (decoded is! Map) {
+      throw const DeviceSignInException(
+        DeviceSignInErrorType.invalidResponse,
+        'F1TV returned an invalid token response.',
+      );
+    }
+    final map = Map<String, dynamic>.from(decoded);
+    final accessToken = map['access_token'];
+    final tokenType = map['token_type'];
+    final expiresInRaw = map['expires_in'];
+    final rawRefreshToken = map['refresh_token'];
+
+    if (accessToken is! String ||
+        accessToken.isEmpty ||
+        tokenType is! String ||
+        tokenType.toLowerCase() != 'bearer' ||
+        expiresInRaw is! num ||
+        !expiresInRaw.isFinite ||
+        expiresInRaw <= 0) {
+      throw const DeviceSignInException(
+        DeviceSignInErrorType.invalidResponse,
+        'F1TV returned an incomplete token response.',
+      );
+    }
+
+    final accessClaims = decodeJwtClaims(accessToken);
+    if (accessClaims == null) {
+      throw const DeviceSignInException(
+        DeviceSignInErrorType.invalidResponse,
+        'F1TV returned a malformed access token.',
+      );
+    }
+
+    final rawSubscription = accessClaims['subscriptionToken'];
+    final subscriptionToken =
+        (rawSubscription is String && rawSubscription.isNotEmpty)
+        ? rawSubscription
+        : previous?.subscriptionToken;
+
+    if (subscriptionToken == null || subscriptionToken.isEmpty) {
+      throw const DeviceSignInException(
+        DeviceSignInErrorType.invalidResponse,
+        'F1TV response did not include a subscription token.',
+      );
+    }
+
+    final claims = decodeJwtClaims(subscriptionToken);
+    if (claims == null) {
+      throw const DeviceSignInException(
+        DeviceSignInErrorType.invalidResponse,
+        'F1TV returned a malformed subscription token.',
+      );
+    }
+
+    final sessionId = claims['SessionId'];
+    final expiryRaw = claims['exp'];
+    final subscriberId = _parsePositiveInt(claims['SubscriberId']);
+    final refreshToken =
+        (rawRefreshToken is String && rawRefreshToken.isNotEmpty)
+        ? rawRefreshToken
+        : previous?.refreshToken;
+
+    if (sessionId is! String ||
+        sessionId.isEmpty ||
+        expiryRaw is! num ||
+        !expiryRaw.isFinite ||
+        subscriberId == null ||
+        refreshToken == null ||
+        refreshToken.isEmpty) {
+      throw const DeviceSignInException(
+        DeviceSignInErrorType.invalidResponse,
+        'F1TV subscription token is missing required account claims.',
+      );
+    }
+
+    final nowSeconds = currentTime.millisecondsSinceEpoch / 1000.0;
+    if (expiryRaw <= nowSeconds) {
+      throw const DeviceSignInException(
+        DeviceSignInErrorType.expired,
+        'Your F1TV session has expired. Please sign in again.',
+      );
+    }
+
+    final playbackExpiresAt = DateTime.fromMillisecondsSinceEpoch(
+      (expiryRaw * 1000).round(),
+      isUtc: true,
+    );
+    final oauthTokenExpiry = currentTime.add(
+      Duration(milliseconds: (expiresInRaw * 1000).round()),
+    );
+    final effectiveExpiry = oauthTokenExpiry.isBefore(playbackExpiresAt)
+        ? oauthTokenExpiry
+        : playbackExpiresAt;
+
+    final firstName =
+        claims['FirstName']?.toString() ??
+        previous?.userData['FirstName']?.toString() ??
+        '';
+    final lastName =
+        claims['LastName']?.toString() ??
+        previous?.userData['LastName']?.toString() ??
+        '';
+    final email =
+        claims['Email']?.toString() ??
+        accessClaims['email']?.toString() ??
+        previous?.userData['Email']?.toString() ??
+        '';
+    final homeCountry =
+        claims['HomeCountry']?.toString() ??
+        previous?.userData['HomeCountry']?.toString() ??
+        '';
+    final subscriptionStatus =
+        claims['SubscriptionStatus']?.toString() ??
+        previous?.userData['Status']?.toString() ??
+        'Unknown';
+    final subscribedProduct =
+        claims['SubscribedProduct']?.toString() ??
+        previous?.userData['SubscriptionInfo']?['SubscriptionName']?.toString();
+
+    final userData = <String, dynamic>{
+      'authType': Formula1Service.oauthAuthType,
+      'SessionId': sessionId,
+      'refreshToken': refreshToken,
+      'oauthExpiresAt': effectiveExpiry.toIso8601String(),
+      'playbackExpiresAt': playbackExpiresAt.toIso8601String(),
+      'Email': email,
+      'SubscriberId': subscriberId,
+      'FirstName': firstName,
+      'LastName': lastName,
+      'HomeCountry': homeCountry,
+      'SubscriberLanguage': claims['SubscriberLanguage']?.toString() ?? 'en-GB',
+      'Status': subscriptionStatus,
+      'data': <String, dynamic>{
+        'subscriptionToken': subscriptionToken,
+        'subscriptionStatus': subscriptionStatus,
+      },
+      'SubscriptionInfo': <String, dynamic>{
+        'SubscriptionName':
+            (subscribedProduct != null && subscribedProduct.isNotEmpty)
+            ? subscribedProduct
+            : 'F1 TV',
+        'SubscriptionStatus': subscriptionStatus,
+      },
+    };
+
+    final rawEntitlements =
+        claims['Entitlements'] ?? claims['ExternalAuthorizations'];
+    if (rawEntitlements is List && rawEntitlements.isNotEmpty) {
+      userData['Entitlements'] = rawEntitlements;
+    } else if (previous?.userData['Entitlements'] is List &&
+        (previous!.userData['Entitlements'] as List).isNotEmpty) {
+      userData['Entitlements'] = previous.userData['Entitlements'];
+    }
+
+    return DeviceAccountSession(
+      refreshToken: refreshToken,
+      expiresAt: effectiveExpiry,
+      playbackExpiresAt: playbackExpiresAt,
+      sessionId: sessionId,
+      subscriptionToken: subscriptionToken,
+      userData: userData,
+    );
+  }
+
+  static DeviceAccountSession? fromSavedUserData(
+    Map<String, dynamic>? userData,
+  ) {
+    if (userData == null ||
+        userData['authType'] != Formula1Service.oauthAuthType) {
+      return null;
+    }
+    final refreshToken = userData['refreshToken'];
+    final sessionId = userData['SessionId'];
+    final data = userData['data'];
+    final subscriptionToken = data is Map ? data['subscriptionToken'] : null;
+    final expiresAt = DateTime.tryParse(
+      userData['oauthExpiresAt']?.toString() ?? '',
+    )?.toUtc();
+    final playbackExpiresAt = DateTime.tryParse(
+      userData['playbackExpiresAt']?.toString() ?? '',
+    )?.toUtc();
+
+    if (refreshToken is! String ||
+        refreshToken.isEmpty ||
+        sessionId is! String ||
+        sessionId.isEmpty ||
+        subscriptionToken is! String ||
+        subscriptionToken.isEmpty ||
+        expiresAt == null ||
+        playbackExpiresAt == null) {
+      return null;
+    }
+
+    return DeviceAccountSession(
+      refreshToken: refreshToken,
+      expiresAt: expiresAt,
+      playbackExpiresAt: playbackExpiresAt,
+      sessionId: sessionId,
+      subscriptionToken: subscriptionToken,
+      userData: Map<String, dynamic>.from(userData),
+    );
+  }
+
+  static int? _parsePositiveInt(dynamic value) {
+    if (value is int) {
+      return value > 0 ? value : null;
+    }
+    if (value is num && value.isFinite && value > 0) {
+      return value.toInt();
+    }
+    if (value is String) {
+      final parsed = int.tryParse(value.trim());
+      if (parsed != null && parsed > 0) return parsed;
+    }
+    return null;
+  }
+}
+
 class Formula1Service {
-  static const String _accountLoginUrl = 'https://account.formula1.com/#/login';
+  // Public TV OAuth client identifier published by account.formula1.com.
+  static const String oauthClientId = '13c21153-f2f3-484b-a642-f2a2927e55de';
+  static const String oauthScope = 'openid f1tv_groups';
+  static const String oauthBaseUrl = 'https://id.formula1.com/as';
+  static const String oauthAuthType = 'oauth_device';
+
   static const String _reese84Key = 'formula1_reese84_token';
   static const String _userDataKey = 'formula1_user_data';
   static const String _apiKey = 'BPhVa4xbZoebPNdxRor9rouq6gzMoPyZ';
   static const String _systemId = '60a9ad84-e93d-480f-80d6-af37494f2e22';
-
-  static String? _challengeUserAgent;
-
-  static Future<String?> getReese84Token(BuildContext context) =>
-      _prepareChallenge();
-
-  static Future<String?> _prepareChallenge() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.remove(_reese84Key);
-    _challengeUserAgent = null;
-    final Completer<String?> completer = Completer<String?>();
-    Timer? timeoutTimer;
-    var cookieLookupStarted = false;
-
-    final headlessWebView = HeadlessInAppWebView(
-      initialSettings: InAppWebViewSettings(javaScriptEnabled: true),
-      onWebViewCreated: (controller) {
-        controller.loadUrl(
-          urlRequest: URLRequest(url: WebUri(_accountLoginUrl)),
-        );
-      },
-      onLoadStop: (controller, url) async {
-        if (cookieLookupStarted || completer.isCompleted) return;
-        cookieLookupStarted = true;
-
-        try {
-          final userAgent = await controller.evaluateJavascript(
-            source: 'navigator.userAgent',
-          );
-          if (userAgent is String && userAgent.isNotEmpty) {
-            _challengeUserAgent = userAgent;
-          }
-          final reese84Token = await _waitForReese84Cookie();
-
-          if (!completer.isCompleted) {
-            if (reese84Token != null) {
-              completer.complete(reese84Token);
-            } else {
-              completer.completeError(
-                'Timed out waiting for the F1TV authentication token',
-              );
-            }
-          }
-        } catch (e) {
-          if (!completer.isCompleted) {
-            completer.completeError("Failed to get cookies: $e");
-          }
-        }
-      },
-      onReceivedError: (controller, request, error) {
-        if (request.isForMainFrame == true && !completer.isCompleted) {
-          completer.completeError("Failed to load page: ${error.description}");
-        }
-      },
-    );
-
-    try {
-      // The challenge can be set on the parent domain, not just account.
-      // Deleting only the default host cookie can leave a stale token behind.
-      for (final domain in [
-        '.formula1.com',
-        'formula1.com',
-        'account.formula1.com',
-        '.account.formula1.com',
-      ]) {
-        await CookieManager.instance().deleteCookie(
-          url: WebUri(_accountLoginUrl),
-          name: 'reese84',
-          domain: domain,
-        );
-      }
-      await headlessWebView.run();
-      timeoutTimer = Timer(const Duration(seconds: 30), () {
-        if (!completer.isCompleted) {
-          completer.completeError('Timeout getting reese84 token');
-        }
-      });
-
-      final token = await completer.future;
-
-      if (token != null) {
-        await _saveReese84Token(token);
-      }
-
-      return token;
-    } catch (e) {
-      return null;
-    } finally {
-      timeoutTimer?.cancel();
-      await headlessWebView.dispose();
-    }
-  }
-
-  static Future<String?> _waitForReese84Cookie() async {
-    final cookieManager = CookieManager.instance();
-    final deadline = DateTime.now().add(const Duration(seconds: 20));
-
-    while (DateTime.now().isBefore(deadline)) {
-      try {
-        final cookies = await cookieManager.getCookies(
-          url: WebUri(_accountLoginUrl),
-        );
-
-        for (final cookie in cookies) {
-          if (cookie.name == 'reese84' && cookie.value.isNotEmpty) {
-            return cookie.value;
-          }
-        }
-      } catch (_) {
-        // The cookie store may briefly be unavailable while WebView starts.
-      }
-
-      await Future<void>.delayed(const Duration(milliseconds: 500));
-    }
-
-    return null;
-  }
-
-  static Future<void> _saveReese84Token(String token) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_reese84Key, token);
-  }
-
-  static Future<String?> getSavedReese84Token() async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getString(_reese84Key);
-  }
+  static const String _distributionChannel =
+      '40500b92-005d-4e10-972f-b41850d6125b';
 
   static Map<String, dynamic>? _currentUserData;
+  static int _authEpoch = 0;
+  static int _activeAttemptId = 0;
+  static Future<Map<String, dynamic>?>? _inFlightRefresh;
 
   static Map<String, dynamic>? get currentUserData => _currentUserData;
+
+  static String? get currentSessionId {
+    final userData = _currentUserData;
+    if (userData == null) return null;
+    final direct = userData['SessionId'];
+    if (direct is String && direct.isNotEmpty) return direct;
+    final raw = userData['rawResponse'];
+    if (raw is Map &&
+        raw['SessionId'] is String &&
+        (raw['SessionId'] as String).isNotEmpty) {
+      return raw['SessionId'] as String;
+    }
+    return null;
+  }
 
   static Future<void> initialize() async {
     try {
       final userData = await getSavedUserData();
       if (userData != null) {
         _currentUserData = userData;
-
-        if (userData['rawResponse'] != null) {
-          final rawResponse = userData['rawResponse'];
-        }
       }
-    } catch (e) {}
+    } catch (_) {}
   }
 
-  static Future<Map<String, dynamic>?> login(
-    String email,
-    String password, {
+  static Uri? validateVerificationUri(String? raw) {
+    if (raw == null || raw.isEmpty) return null;
+    final uri = Uri.tryParse(raw);
+    if (uri == null || uri.scheme.toLowerCase() != 'https') return null;
+    if (uri.userInfo.isNotEmpty) return null;
+    final host = uri.host.toLowerCase();
+    final isFormula1Host =
+        host == 'f1.com' ||
+        host.endsWith('.f1.com') ||
+        host == 'formula1.com' ||
+        host.endsWith('.formula1.com');
+    if (!isFormula1Host) return null;
+    return uri;
+  }
+
+  static bool isBrowserCompletionUrl(Uri? uri) {
+    if (uri == null) return false;
+    if (uri.scheme.toLowerCase() != 'https') return false;
+    if (uri.host.toLowerCase() != 'account.formula1.com') return false;
+    if (uri.hasPort && uri.port != 443) return false;
+    if (uri.userInfo.isNotEmpty) return false;
+    if (uri.path.isNotEmpty && uri.path != '/') return false;
+    return RegExp(
+      r'^/(?:[a-z]{2}/|/)?tv-account-welcome(?:\?.*)?$',
+    ).hasMatch(uri.fragment);
+  }
+
+  static String buildWebsiteLanguageScript({String languageCode = 'en'}) {
+    const supported = {'en', 'de', 'es', 'fr', 'nl', 'pt'};
+    final normalized = supported.contains(languageCode) ? languageCode : 'en';
+    final encoded = jsonEncode([normalized]);
+    return r'''
+(() => {
+  if (window.top !== window) return;
+  if (location.protocol !== 'https:' || location.hostname !== 'account.formula1.com') return;
+  try { localStorage.setItem('user-language', JSON.stringify(__LANG__[0])); } catch (_) {}
+})();
+'''.replaceFirst('__LANG__', encoded);
+  }
+
+  static String buildVerificationScript(
+    String userCode, {
+    String completionMessage = 'Completing sign-in...',
+  }) {
+    final encoded = jsonEncode([userCode, completionMessage]);
+    return r'''
+(() => {
+  if (window.top !== window) return;
+  if (location.protocol !== 'https:' || location.hostname !== 'account.formula1.com') return;
+  const values = __VALUES__;
+  const expected = values[0].replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
+  let attempted = false;
+  const attempt = () => {
+    if (attempted || !/^#\/(?:[a-z]{2}\/|\/)?tv-account-sync(?:[?/]|$)/.test(location.hash)) return;
+    const form = document.querySelector('.tv-account-sync-wrapper');
+    const fields = form && Array.from(form.querySelectorAll('.otp-input'));
+    const button = form && form.querySelector('.tv-account-sync');
+    if (!fields || fields.length !== 8 || fields.map(field => field.value).join('').toUpperCase() !== expected ||
+        !button || button.disabled || button.getAttribute('aria-disabled') === 'true') return;
+    attempted = true;
+    button.click();
+    const status = document.createElement('p');
+    status.textContent = values[1];
+    status.setAttribute('role', 'status');
+    status.style.visibility = 'visible';
+    form.style.visibility = 'hidden';
+    form.appendChild(status);
+    const restore = () => { form.style.visibility = ''; status.remove(); };
+    const errors = new MutationObserver(() => {
+      const error = form.querySelector('.error-container');
+      if (error && error.textContent.trim()) { restore(); errors.disconnect(); }
+    });
+    errors.observe(form, { childList: true, subtree: true, characterData: true });
+    setTimeout(() => { restore(); errors.disconnect(); }, 15000);
+  };
+  const observer = new MutationObserver(attempt);
+  observer.observe(document.documentElement, { childList: true, subtree: true });
+  addEventListener('hashchange', attempt);
+  const timer = setInterval(attempt, 250);
+  setTimeout(() => { clearInterval(timer); observer.disconnect(); removeEventListener('hashchange', attempt); }, 600000);
+  attempt();
+})();
+'''.replaceFirst('__VALUES__', encoded);
+  }
+
+  static String buildCompletionWatcherScript() {
+    return r'''
+(() => {
+  if (window.top !== window) return;
+  if (location.protocol !== 'https:' || location.hostname !== 'account.formula1.com') return;
+  if (window.__shiplusCompletionHooked) return;
+  window.__shiplusCompletionHooked = true;
+  const notify = () => {
+    if (/^#\/(?:[a-z]{2}\/|\/)?tv-account-welcome(?:\?.*)?$/.test(location.hash)) {
+      if (window.flutter_inappwebview && typeof window.flutter_inappwebview.callHandler === 'function') {
+        window.flutter_inappwebview.callHandler('f1Completion', location.href);
+      }
+    }
+  };
+  addEventListener('hashchange', notify);
+  addEventListener('popstate', notify);
+  const wrapHistory = (methodName) => {
+    const original = history[methodName];
+    if (typeof original !== 'function') return;
+    history[methodName] = function() {
+      const result = original.apply(this, arguments);
+      notify();
+      return result;
+    };
+  };
+  wrapHistory('pushState');
+  wrapHistory('replaceState');
+  notify();
+})();
+''';
+  }
+
+  static Future<DeviceAuthorization> beginDeviceSignIn({
     Dio? client,
-    Future<String?> Function()? prepareChallenge,
+    DateTime Function()? now,
+  }) async {
+    final currentTime = (now ?? DateTime.now)();
+    final attemptId = ++_activeAttemptId;
+    _authEpoch++;
+    _inFlightRefresh = null;
+
+    final response = await _postOAuthForm('device_authorization', const {
+      'client_id': oauthClientId,
+      'scope': oauthScope,
+    }, client: client);
+
+    if (attemptId != _activeAttemptId) {
+      throw const DeviceSignInException(
+        DeviceSignInErrorType.cancelled,
+        'Sign-in was cancelled.',
+      );
+    }
+
+    if (response.statusCode != 200) {
+      throw DeviceSignInException(
+        DeviceSignInErrorType.unavailable,
+        'F1TV sign-in service is unavailable (HTTP ${response.statusCode ?? 'unknown'}).',
+        statusCode: response.statusCode,
+      );
+    }
+
+    final decoded = Formula1LoginDiagnostics.decodeBody(response.data);
+    if (decoded is! Map) {
+      throw const DeviceSignInException(
+        DeviceSignInErrorType.invalidResponse,
+        'F1TV returned an invalid device authorization response.',
+      );
+    }
+
+    final map = Map<String, dynamic>.from(decoded);
+    final deviceCode = map['device_code'];
+    final userCode = map['user_code'];
+    final expiresIn = map['expires_in'];
+    final intervalRaw = map['interval'] ?? 5.0;
+    final verificationUri = validateVerificationUri(
+      map['verification_uri']?.toString(),
+    );
+    final verificationUriComplete = validateVerificationUri(
+      (map['verification_uri_complete'] ?? map['verification_uri'])?.toString(),
+    );
+
+    if (deviceCode is! String ||
+        deviceCode.isEmpty ||
+        userCode is! String ||
+        userCode.isEmpty ||
+        expiresIn is! num ||
+        !expiresIn.isFinite ||
+        expiresIn <= 0 ||
+        expiresIn > 86400 ||
+        intervalRaw is! num ||
+        !intervalRaw.isFinite ||
+        intervalRaw <= 0 ||
+        verificationUri == null ||
+        verificationUriComplete == null) {
+      throw const DeviceSignInException(
+        DeviceSignInErrorType.invalidResponse,
+        'F1TV returned incomplete device pairing information.',
+      );
+    }
+
+    return DeviceAuthorization(
+      deviceCode: deviceCode,
+      userCode: userCode,
+      verificationUri: verificationUri,
+      verificationUriComplete: verificationUriComplete,
+      expiresAt: currentTime.toUtc().add(
+        Duration(milliseconds: (expiresIn * 1000).round()),
+      ),
+      intervalSeconds: intervalRaw.toDouble(),
+      attemptId: attemptId,
+    );
+  }
+
+  static Future<Map<String, dynamic>> completeDeviceSignIn(
+    DeviceAuthorization authorization, {
+    bool browserApproved = false,
+    Dio? client,
+    DateTime Function()? now,
+    Future<void> Function(Duration)? wait,
+    bool Function()? isCancelled,
+  }) async {
+    final clock = now ?? DateTime.now;
+    final sleep = wait ?? Future<void>.delayed;
+    final cancelled = isCancelled ?? () => false;
+
+    final generation = _authEpoch;
+    var interval = authorization.intervalSeconds;
+    var firstRequest = true;
+
+    while (true) {
+      if (cancelled() ||
+          authorization.attemptId != _activeAttemptId ||
+          generation != _authEpoch) {
+        throw const DeviceSignInException(
+          DeviceSignInErrorType.cancelled,
+          'Sign-in was cancelled.',
+        );
+      }
+
+      final remaining = authorization.expiresAt.difference(clock().toUtc());
+      if (remaining <= Duration.zero) {
+        throw const DeviceSignInException(
+          DeviceSignInErrorType.expired,
+          'This sign-in code has expired. Request a new code to try again.',
+        );
+      }
+
+      if (!firstRequest || !browserApproved) {
+        final intervalDuration = Duration(
+          milliseconds: (interval * 1000).round(),
+        );
+        final delay = intervalDuration < remaining
+            ? intervalDuration
+            : remaining;
+        await sleep(delay);
+      }
+      firstRequest = false;
+
+      if (cancelled() ||
+          authorization.attemptId != _activeAttemptId ||
+          generation != _authEpoch) {
+        throw const DeviceSignInException(
+          DeviceSignInErrorType.cancelled,
+          'Sign-in was cancelled.',
+        );
+      }
+
+      if (!authorization.expiresAt.isAfter(clock().toUtc())) {
+        throw const DeviceSignInException(
+          DeviceSignInErrorType.expired,
+          'This sign-in code has expired. Request a new code to try again.',
+        );
+      }
+
+      late final _OAuthHttpResult response;
+      try {
+        response = await _postOAuthForm('token', {
+          'client_id': oauthClientId,
+          'grant_type': 'urn:ietf:params:oauth:grant-type:device_code',
+          'device_code': authorization.deviceCode,
+        }, client: client);
+      } on DioException catch (e) {
+        if (e.type == DioExceptionType.connectionTimeout ||
+            e.type == DioExceptionType.sendTimeout ||
+            e.type == DioExceptionType.receiveTimeout) {
+          interval = math.min(interval * 2, 60.0);
+          continue;
+        }
+        throw DeviceSignInException(
+          DeviceSignInErrorType.unavailable,
+          'F1TV sign-in request failed (${e.type.name}).',
+        );
+      }
+
+      if (cancelled() ||
+          authorization.attemptId != _activeAttemptId ||
+          generation != _authEpoch) {
+        throw const DeviceSignInException(
+          DeviceSignInErrorType.cancelled,
+          'Sign-in was cancelled.',
+        );
+      }
+
+      final status = response.statusCode ?? 0;
+      if (status == 200) {
+        final session = DeviceAccountSession.decode(
+          response.data,
+          now: clock(),
+        );
+        if (cancelled() ||
+            authorization.attemptId != _activeAttemptId ||
+            generation != _authEpoch) {
+          throw const DeviceSignInException(
+            DeviceSignInErrorType.cancelled,
+            'Sign-in was cancelled.',
+          );
+        }
+        final nextEpoch = ++_authEpoch;
+        _activeAttemptId++;
+        _inFlightRefresh = null;
+        await _saveUserData(session.userData);
+        if (cancelled() || _authEpoch != nextEpoch) {
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.remove(_userDataKey);
+          _currentUserData = null;
+          throw const DeviceSignInException(
+            DeviceSignInErrorType.cancelled,
+            'Sign-in was cancelled.',
+          );
+        }
+        _currentUserData = session.userData;
+        return session.userData;
+      }
+
+      if (status >= 500) {
+        interval = math.min(interval * 2, 60.0);
+        continue;
+      }
+
+      switch (_extractOAuthError(response.data)) {
+        case 'authorization_pending':
+          continue;
+        case 'slow_down':
+          interval += 5.0;
+          continue;
+        case 'access_denied':
+          throw const DeviceSignInException(
+            DeviceSignInErrorType.denied,
+            'Sign-in was denied in the browser.',
+          );
+        case 'expired_token':
+          throw const DeviceSignInException(
+            DeviceSignInErrorType.expired,
+            'This sign-in code has expired. Request a new code to try again.',
+          );
+        default:
+          throw DeviceSignInException(
+            DeviceSignInErrorType.rejected,
+            'F1TV rejected the sign-in request (HTTP $status).',
+            statusCode: status,
+          );
+      }
+    }
+  }
+
+  static Future<String?> getValidSubscriptionToken({
+    Dio? client,
+    DateTime Function()? now,
+  }) async {
+    _currentUserData ??= await getSavedUserData();
+    final userData = _currentUserData;
+    if (userData == null) return null;
+
+    final session = DeviceAccountSession.fromSavedUserData(userData);
+    if (session != null) {
+      final currentTime = (now ?? DateTime.now)().toUtc();
+      if (!session.playbackExpiresAt.isAfter(currentTime)) {
+        await clearAllData(client: client);
+        return null;
+      }
+      if (session.expiresAt.difference(currentTime) <=
+          const Duration(seconds: 30)) {
+        await refreshToken(client: client, now: now);
+      }
+    }
+
+    final token = _currentUserData?['data']?['subscriptionToken'];
+    return token is String && token.isNotEmpty ? token : null;
+  }
+
+  static Future<Map<String, dynamic>?> refreshToken({
+    Dio? client,
+    DateTime Function()? now,
+  }) async {
+    _currentUserData ??= await getSavedUserData();
+    final userData = _currentUserData;
+    if (userData == null) return null;
+
+    final oauthSession = DeviceAccountSession.fromSavedUserData(userData);
+    if (oauthSession != null) {
+      if (_inFlightRefresh != null) {
+        return await _inFlightRefresh;
+      }
+      final generation = _authEpoch;
+      final task = _performOAuthRefresh(
+        oauthSession,
+        generation,
+        client: client,
+        now: now,
+      );
+      _inFlightRefresh = task;
+      try {
+        return await task;
+      } finally {
+        if (identical(_inFlightRefresh, task)) {
+          _inFlightRefresh = null;
+        }
+      }
+    }
+
+    return _refreshLegacyDeviceToken(client: client);
+  }
+
+  static Future<Map<String, dynamic>?> _performOAuthRefresh(
+    DeviceAccountSession snapshot,
+    int generation, {
+    Dio? client,
+    DateTime Function()? now,
   }) async {
     try {
-      var reese84Token = await getSavedReese84Token();
-      if (reese84Token == null || reese84Token.isEmpty) {
-        throw Exception('No authentication token available');
+      final response = await _postOAuthForm('token', {
+        'client_id': oauthClientId,
+        'grant_type': 'refresh_token',
+        'refresh_token': snapshot.refreshToken,
+      }, client: client);
+
+      if (_authEpoch != generation) return null;
+
+      if (response.statusCode == 400 &&
+          _extractOAuthError(response.data) == 'invalid_grant') {
+        await _discardLocalSessionIfGeneration(generation);
+        return null;
       }
 
-      final uuid = const Uuid().v4();
-
-      final dio = client ?? Dio();
-      Future<Response<dynamic>> register() async {
-        debugPrint('[F1TV login] RegisterDevice request started');
-        try {
-          final response = await dio.post(
-            'https://api.formula1.com/v1/account/Subscriber/RegisterDevice',
-            data: {
-              'Login': email,
-              'Password': password,
-              'Nickname': 'shiplus',
-              'PhysicalDevice': {
-                'DeviceTypeCode': 12,
-                'DeviceId': '$uuid-tvOS',
-                'PhysicalDeviceTypeCode': 1002,
-              },
-            },
-            options: Options(
-              headers: {
-                'X-D-Token': reese84Token,
-                if (_challengeUserAgent != null)
-                  'User-Agent': _challengeUserAgent,
-                'apikey': _apiKey,
-                'CD-SystemID': _systemId,
-                'Content-Type': 'application/json',
-              },
-            ),
-          );
-
-          debugPrint(
-            Formula1LoginDiagnostics.describe(
-              response.statusCode,
-              response.data,
-              contentType: response.headers.value('content-type'),
-            ),
-          );
-          return response;
-        } on DioException catch (e) {
-          debugPrint(
-            Formula1LoginDiagnostics.describe(
-              e.response?.statusCode,
-              e.response?.data,
-              contentType: e.response?.headers.value('content-type'),
-            ),
-          );
-          debugPrint('[F1TV login] Transport error: ${e.type.name}');
-          rethrow;
-        }
+      if (response.statusCode != 200) {
+        return null;
       }
 
-      late final Response<dynamic> response;
+      final DeviceAccountSession renewed;
       try {
-        response = await register();
-      } on DioException catch (e) {
-        if (e.response?.statusCode != 403) rethrow;
-        debugPrint('[F1TV login] HTTP 403; renewing browser challenge once');
-        // Refresh the challenge once; keep the device ID stable for the retry.
-        final prefs = await SharedPreferences.getInstance();
-        await prefs.remove(_reese84Key);
-        reese84Token = await (prepareChallenge ?? _prepareChallenge)();
-        if (reese84Token == null || reese84Token.isEmpty) {
-          throw Exception(
-            'F1TV rejected sign-in (403) and browser verification could not '
-            'be renewed. Please try signing in again.',
-          );
+        renewed = DeviceAccountSession.decode(
+          response.data,
+          previous: snapshot,
+          now: now?.call(),
+        );
+      } on DeviceSignInException catch (e) {
+        if (e.type == DeviceSignInErrorType.expired) {
+          await _discardLocalSessionIfGeneration(generation);
         }
-        response = await register();
+        return null;
       }
 
-      final responseData = Formula1LoginDiagnostics.decodeBody(response.data);
-      final status = response.statusCode ?? 0;
-      if (status >= 200 &&
-          status < 300 &&
-          responseData is Map<String, dynamic> &&
-          responseData['data'] is Map &&
-          responseData['data']['subscriptionToken'] is String &&
-          (responseData['data']['subscriptionToken'] as String).isNotEmpty) {
-        final Map<String, dynamic> userData = {'rawResponse': responseData};
+      if (_authEpoch != generation) return null;
 
-        if (responseData['PhysicalDevice'] != null) {
-          userData['PhysicalDevice'] = responseData['PhysicalDevice'];
-        }
-
-        if (responseData['RemainingDeviceAssociations'] != null) {
-          userData['RemainingDeviceAssociations'] =
-              responseData['RemainingDeviceAssociations'];
-        }
-
-        if (responseData['SessionSummary'] != null) {
-          final sessionSummary = responseData['SessionSummary'];
-          userData['Email'] = sessionSummary['Email'] ?? email;
-          userData['SubscriberId'] = sessionSummary['SubscriberId'] ?? '';
-          userData['FirstName'] = sessionSummary['FirstName'] ?? '';
-          userData['LastName'] = sessionSummary['LastName'] ?? '';
-          userData['HomeCountry'] = sessionSummary['HomeCountry'] ?? '';
-          userData['SubscriberLanguage'] =
-              sessionSummary['SubscriberLanguage'] ?? 'en-GB';
-          userData['Title'] = sessionSummary['Title'] ?? '';
-
-          if (sessionSummary['ExternalAuthorizations'] != null) {
-            userData['ExternalAuthorizations'] =
-                sessionSummary['ExternalAuthorizations'];
-          }
-
-          if (sessionSummary['TermsAndConditionsAccepted'] != null) {
-            userData['TermsAndConditionsAccepted'] =
-                sessionSummary['TermsAndConditionsAccepted'];
-          }
-        }
-
-        if (responseData['data'] != null) {
-          final data = responseData['data'];
-          userData['data'] = data;
-          userData['Status'] = data['subscriptionStatus'] ?? 'Unknown';
-        }
-
-        if (userData['Entitlements'] == null) {
-          userData['Entitlements'] = [
-            {'Name': 'PREMIUM', 'Country': userData['HomeCountry'] ?? ''},
-            {'Name': 'REG', 'Country': userData['HomeCountry'] ?? ''},
-          ];
-        }
-
-        if (userData['SubscriptionInfo'] == null) {
-          userData['SubscriptionInfo'] = {
-            'SubscriptionName': 'F1 TV Premium',
-            'SubscriptionStatus': 'active',
-            'ExpiryDate': DateTime.now()
-                .add(const Duration(days: 30))
-                .toString(),
-          };
-        }
-
-        _currentUserData = userData;
-
-        await _saveUserData(userData);
-        return userData;
-      } else {
-        debugPrint(
-          '[F1TV login] Response rejected: expected a successful '
-          'JSON object with a non-empty data.subscriptionToken. '
-          'No account data was saved.',
-        );
-        throw Exception(
-          'Invalid F1TV login response (HTTP $status). '
-          'See the [F1TV login] console log for response diagnostics',
-        );
+      await _saveUserData(renewed.userData);
+      if (_authEpoch != generation) {
+        await _discardLocalSessionIfGeneration(_authEpoch);
+        return null;
       }
-    } on DioException catch (e) {
-      final statusCode = e.response?.statusCode;
-      throw Exception(
-        'F1TV login request failed'
-        '${statusCode == null ? '' : ' ($statusCode)'}.'
-        '${statusCode == 403 ? ' Sign-in was rejected after renewed browser verification. Please try again or check your network.' : ''}',
-      );
-    } catch (e) {
-      throw Exception('F1TV login failed: $e');
+      _currentUserData = renewed.userData;
+      return _currentUserData;
+    } catch (_) {
+      return null;
     }
+  }
+
+  static Future<Map<String, dynamic>?> _refreshLegacyDeviceToken({
+    Dio? client,
+  }) async {
+    try {
+      if (_currentUserData == null ||
+          _currentUserData!['PhysicalDevice'] == null) {
+        return null;
+      }
+
+      final authenticationKey =
+          _currentUserData!['PhysicalDevice']['AuthenticationKey'];
+      if (authenticationKey == null) {
+        return null;
+      }
+      final deviceId = _currentUserData!['PhysicalDevice']['DeviceId'];
+
+      final dio = client ?? await DioHelper.createPlainDio();
+      try {
+        final response = await dio.post(
+          'https://api.formula1.com/v2/account/subscriber/authenticate/by-device',
+          data: {
+            'DistributionChannel': _distributionChannel,
+            'Language': 'en-GB',
+            'AuthenticationKey': authenticationKey,
+            'DeviceId': deviceId,
+          },
+          options: Options(
+            headers: {'apikey': _apiKey, 'Content-Type': 'application/json'},
+          ),
+        );
+
+        if (response.statusCode == 200) {
+          final responseData = Formula1LoginDiagnostics.decodeBody(
+            response.data,
+          );
+          if (_currentUserData != null && responseData is Map) {
+            if (responseData['AuthenticationKey'] != null) {
+              _currentUserData!['SessionId'] =
+                  responseData['AuthenticationKey'];
+              _currentUserData!['PhysicalDevice']['AuthenticationKey'] =
+                  responseData['AuthenticationKey'];
+            }
+
+            if (responseData['data'] != null) {
+              _currentUserData!['data'] = responseData['data'];
+            }
+
+            await _saveUserData(_currentUserData!);
+          }
+
+          return _currentUserData;
+        }
+        return null;
+      } finally {
+        if (client == null) {
+          dio.close();
+        }
+      }
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static Future<void> _discardLocalSessionIfGeneration(int generation) async {
+    if (_authEpoch != generation) return;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_userDataKey);
+    await prefs.remove(_reese84Key);
+    _currentUserData = null;
   }
 
   static Future<void> _saveUserData(Map<String, dynamic> userData) async {
@@ -345,63 +902,10 @@ class Formula1Service {
     return null;
   }
 
-  static Future<Map<String, dynamic>?> refreshToken() async {
+  static Future<bool> unregisterDevice({Dio? client}) async {
     try {
       if (_currentUserData == null ||
-          _currentUserData!['PhysicalDevice'] == null) {
-        return null;
-      }
-
-      final authenticationKey =
-          _currentUserData!['PhysicalDevice']['AuthenticationKey'];
-      if (authenticationKey == null) {
-        return null;
-      }
-      final deviceId = _currentUserData!['PhysicalDevice']['DeviceId'];
-
-      final dio = Dio();
-
-      final response = await dio.post(
-        'https://api.formula1.com/v2/account/subscriber/authenticate/by-device',
-        data: {
-          'DistributionChannel': '40500b92-005d-4e10-972f-b41850d6125b',
-          'Language': 'en-GB',
-          'AuthenticationKey': authenticationKey,
-          'DeviceId': deviceId,
-        },
-        options: Options(
-          headers: {'apikey': _apiKey, 'Content-Type': 'application/json'},
-        ),
-      );
-
-      if (response.statusCode == 200) {
-        final responseData = response.data;
-        if (_currentUserData != null) {
-          if (responseData['AuthenticationKey'] != null) {
-            _currentUserData!['SessionId'] = responseData['AuthenticationKey'];
-            _currentUserData!['PhysicalDevice']['AuthenticationKey'] =
-                responseData['AuthenticationKey'];
-          }
-
-          if (responseData['data'] != null) {
-            _currentUserData!['data'] = responseData['data'];
-          }
-
-          await _saveUserData(_currentUserData!);
-        }
-
-        return _currentUserData;
-      } else {
-        throw Exception('Token refresh failed: ${response.statusCode}');
-      }
-    } catch (e) {
-      return null;
-    }
-  }
-
-  static Future<bool> unregisterDevice() async {
-    try {
-      if (_currentUserData == null ||
+          _currentUserData!['authType'] == oauthAuthType ||
           _currentUserData!['PhysicalDevice'] == null ||
           _currentUserData!['rawResponse'] == null) {
         return false;
@@ -416,37 +920,43 @@ class Formula1Service {
         return false;
       }
 
-      final dio = Dio();
+      final dio = client ?? await DioHelper.createPlainDio();
+      try {
+        final response = await dio.post(
+          'https://api.formula1.com/v1/account/Subscriber/UnregisterDevice',
+          data: {'DeviceId': deviceId, 'AuthenticationKey': authenticationKey},
+          options: Options(
+            headers: {
+              'apikey': _apiKey,
+              'CD-SessionID': sessionId,
+              'CD-SystemID': _systemId,
+              'Content-Type': 'application/json',
+            },
+          ),
+        );
 
-      final response = await dio.post(
-        'https://api.formula1.com/v1/account/Subscriber/UnregisterDevice',
-        data: {'DeviceId': deviceId, 'AuthenticationKey': authenticationKey},
-        options: Options(
-          headers: {
-            'apikey': _apiKey,
-            'CD-SessionID': sessionId,
-            'CD-SystemID': _systemId,
-            'Content-Type': 'application/json',
-          },
-        ),
-      );
-
-      if (response.statusCode == 200) {
-        return true;
-      } else {
-        return false;
+        return response.statusCode == 200;
+      } finally {
+        if (client == null) {
+          dio.close();
+        }
       }
-    } catch (e) {
+    } catch (_) {
       return false;
     }
   }
 
-  static Future<void> clearAllData() async {
+  static Future<void> clearAllData({Dio? client}) async {
+    _authEpoch++;
+    _activeAttemptId++;
+    _inFlightRefresh = null;
+
     try {
-      if (_currentUserData != null) {
-        await unregisterDevice();
+      if (_currentUserData != null &&
+          _currentUserData!['authType'] != oauthAuthType) {
+        await unregisterDevice(client: client);
       }
-    } catch (e) {
+    } catch (_) {
     } finally {
       final prefs = await SharedPreferences.getInstance();
       await prefs.remove(_reese84Key);
@@ -454,4 +964,106 @@ class Formula1Service {
       _currentUserData = null;
     }
   }
+
+  static Future<_OAuthHttpResult> _postOAuthForm(
+    String path,
+    Map<String, String> values, {
+    Dio? client,
+  }) async {
+    final dio = client ?? await DioHelper.createPlainDio();
+    final encodedBody = encodeForm(values);
+    debugPrint('[F1TV login] POST $oauthBaseUrl/$path started');
+    try {
+      final response = await dio.post<dynamic>(
+        '$oauthBaseUrl/$path',
+        data: encodedBody,
+        options: Options(
+          followRedirects: false,
+          validateStatus: (_) => true,
+          headers: const {
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'Accept': 'application/json',
+          },
+        ),
+      );
+      debugPrint(
+        Formula1LoginDiagnostics.describe(
+          response.statusCode,
+          response.data,
+          contentType: response.headers.value('content-type'),
+        ),
+      );
+      return _OAuthHttpResult(
+        statusCode: response.statusCode,
+        data: response.data,
+      );
+    } on DioException catch (e) {
+      if (e.response != null) {
+        debugPrint(
+          Formula1LoginDiagnostics.describe(
+            e.response?.statusCode,
+            e.response?.data,
+            contentType: e.response?.headers.value('content-type'),
+          ),
+        );
+        return _OAuthHttpResult(
+          statusCode: e.response?.statusCode,
+          data: e.response?.data,
+        );
+      }
+      debugPrint('[F1TV login] Transport error: ${e.type.name}');
+      rethrow;
+    } finally {
+      if (client == null) {
+        dio.close();
+      }
+    }
+  }
+
+  static String encodeForm(Map<String, String> values) {
+    final keys = values.keys.toList()..sort();
+    return keys
+        .map(
+          (key) =>
+              '${_percentEncodeRfc3986(key)}=${_percentEncodeRfc3986(values[key]!)}',
+        )
+        .join('&');
+  }
+
+  static String _percentEncodeRfc3986(String input) {
+    final bytes = utf8.encode(input);
+    final buffer = StringBuffer();
+    for (final byte in bytes) {
+      final isUnreserved =
+          (byte >= 0x41 && byte <= 0x5A) ||
+          (byte >= 0x61 && byte <= 0x7A) ||
+          (byte >= 0x30 && byte <= 0x39) ||
+          byte == 0x2D ||
+          byte == 0x2E ||
+          byte == 0x5F ||
+          byte == 0x7E;
+      if (isUnreserved) {
+        buffer.writeCharCode(byte);
+      } else {
+        buffer.write('%');
+        buffer.write(byte.toRadixString(16).toUpperCase().padLeft(2, '0'));
+      }
+    }
+    return buffer.toString();
+  }
+
+  static String? _extractOAuthError(dynamic body) {
+    final decoded = Formula1LoginDiagnostics.decodeBody(body);
+    if (decoded is Map && decoded['error'] is String) {
+      return decoded['error'] as String;
+    }
+    return null;
+  }
+}
+
+class _OAuthHttpResult {
+  const _OAuthHttpResult({required this.statusCode, required this.data});
+
+  final int? statusCode;
+  final dynamic data;
 }

@@ -22,6 +22,7 @@ class Formula1LoginDiagnostics {
       'faultcode',
       'code',
       'statuscode',
+      'error',
     };
     if (codeKeys.contains(key.toLowerCase())) {
       final code = value.toString();
