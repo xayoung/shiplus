@@ -4,6 +4,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'ui/shiplus_ui.dart';
 import 'f1_login_dialog.dart';
+import '../services/app_notification_service.dart';
 import '../services/download_service.dart';
 import '../services/n_m3u8dl_config_service.dart';
 import '../services/formula1_service.dart';
@@ -495,14 +496,16 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 
   void _showSuccessSnackBar(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message), backgroundColor: Colors.green),
+    AppNotificationService.instance.showSuccess(
+      id: 'settings_notice',
+      title: message,
     );
   }
 
   void _showErrorSnackBar(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message), backgroundColor: Colors.red),
+    AppNotificationService.instance.showError(
+      id: 'settings_notice',
+      title: message,
     );
   }
 

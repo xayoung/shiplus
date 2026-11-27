@@ -10,6 +10,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../services/app_notification_service.dart';
 import '../services/formula1_service.dart';
 
 typedef DeviceSignInStarter = Future<DeviceAuthorization> Function();
@@ -352,7 +353,15 @@ class _F1LoginDialogState extends State<F1LoginDialog> {
   Future<void> _copyText(String value, String label) async {
     await Clipboard.setData(ClipboardData(text: value));
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
+    if (AppNotificationService.instance.hasHost) {
+      AppNotificationService.instance.showSuccess(
+        id: 'clipboard_copy',
+        title: '$label copied to clipboard',
+        duration: const Duration(seconds: 2),
+      );
+      return;
+    }
+    ScaffoldMessenger.maybeOf(context)?.showSnackBar(
       SnackBar(
         content: Text('$label copied to clipboard'),
         duration: const Duration(seconds: 2),

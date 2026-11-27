@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 import 'widgets/main_layout.dart';
+import 'widgets/ui/app_notification_overlay.dart';
 import 'services/formula1_service.dart';
 
 void main() async {
@@ -38,6 +39,16 @@ class MyApp extends StatelessWidget {
           scaffoldBackgroundColor: shad.colorScheme.background,
           canvasColor: shad.colorScheme.background,
           dividerColor: shad.colorScheme.border,
+          snackBarTheme: SnackBarThemeData(
+            behavior: SnackBarBehavior.floating,
+            backgroundColor: shad.colorScheme.card,
+            contentTextStyle: TextStyle(color: shad.colorScheme.foreground),
+            actionTextColor: shad.colorScheme.primary,
+            shape: RoundedRectangleBorder(
+              borderRadius: shad.radius,
+              side: BorderSide(color: shad.colorScheme.border),
+            ),
+          ),
           cardTheme: CardThemeData(
             elevation: 0,
             color: shad.colorScheme.card,
@@ -74,7 +85,9 @@ class MyApp extends StatelessWidget {
           theme: materialTheme,
           localizationsDelegates: const [GlobalShadLocalizations.delegate],
           supportedLocales: const [Locale('en', 'US')],
-          builder: (context, child) => ShadAppBuilder(child: child!),
+          builder: (context, child) => ShadAppBuilder(
+            child: AppNotificationOverlay(child: child!),
+          ),
           home: home,
         );
       },

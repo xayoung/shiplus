@@ -48,8 +48,20 @@ class NavigationHelper {
     return getNavigatorState(context, tabIndex)?.canPop() ?? false;
   }
 
+  static final Set<_MainLayoutState> _registeredStates = {};
+
   static bool canPopInCurrentTab(BuildContext context) {
     return canPop(context, getCurrentTabIndex(context));
+  }
+
+  static void switchTab(BuildContext context, int tabIndex) {
+    _state(context)?._selectTab(tabIndex);
+  }
+
+  static bool switchTabGlobal(int tabIndex) {
+    if (_registeredStates.isEmpty) return false;
+    _registeredStates.last._selectTab(tabIndex);
+    return true;
   }
 }
 
@@ -66,6 +78,18 @@ class _MainLayoutState extends State<MainLayout> {
 
   int _selectedIndex = 0;
   bool _isCollapsed = false;
+
+  @override
+  void initState() {
+    super.initState();
+    NavigationHelper._registeredStates.add(this);
+  }
+
+  @override
+  void dispose() {
+    NavigationHelper._registeredStates.remove(this);
+    super.dispose();
+  }
 
   final List<GlobalKey<NavigatorState>> _navigatorKeys = List.generate(
     4,
@@ -94,6 +118,7 @@ class _MainLayoutState extends State<MainLayout> {
   int get currentTabIndex => _selectedIndex;
 
   void _selectTab(int index) {
+    if (index < 0 || index >= _navigationItems.length) return;
     if (_selectedIndex == index) {
       final navigator = _navigatorKeys[index].currentState;
       navigator?.popUntil((route) => route.isFirst);

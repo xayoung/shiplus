@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 import 'package:dio/dio.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:uuid/uuid.dart';
 import 'dart:io';
 import 'package:path/path.dart' as path;
 import 'main_layout.dart';
+import '../services/app_notification_service.dart';
 import '../services/global_download_manager.dart';
 import '../services/download_service.dart';
 import '../utils/dio_helper.dart';
@@ -13,17 +15,47 @@ import '../services/n_m3u8dl_config_service.dart';
 
 class PlayDetailPage extends StatefulWidget {
   final String itemId;
+  final Dio? dio;
+  final Future<String?> Function()? getSubscriptionToken;
+  final Future<Map<String, dynamic>?> Function()? refreshToken;
+  final Future<String> Function()? getDownloadPath;
+  final Future<void> Function(String filePath, String folderPath)? onRevealFile;
+  final Future<String> Function({required String url, required String title})?
+  onAddDownloadTask;
 
-  const PlayDetailPage({super.key, required this.itemId});
+  const PlayDetailPage({
+    super.key,
+    required this.itemId,
+    this.dio,
+    this.getSubscriptionToken,
+    this.refreshToken,
+    this.getDownloadPath,
+    this.onRevealFile,
+    this.onAddDownloadTask,
+  });
 
   @override
   State<PlayDetailPage> createState() => _PlayDetailPageState();
 }
 
 class _PlayDetailPageState extends State<PlayDetailPage> {
+  static const String _coverNotificationId = 'cover_download';
+  static const String _streamNotificationId = 'video_stream';
+  static const Set<String> _imageExtensions = {
+    '.jpg',
+    '.jpeg',
+    '.png',
+    '.webp',
+    '.gif',
+    '.bmp',
+    '.avif',
+  };
+
   Map<String, dynamic>? _metadata;
   List<dynamic>? _additionalStreams;
   bool _isLoading = true;
+  bool _isDownloadingCover = false;
+  bool _isFetchingStream = false;
   String? _error;
   Dio? dio;
   final String _playbackSessionId = const Uuid().v4();
@@ -37,9 +69,11 @@ class _PlayDetailPageState extends State<PlayDetailPage> {
   Future<void> _initializeDio() async {
     try {
       // Create Dio instance with Cookie manager
-      dio = await DioHelper.createDioWithCookies(enableDebug: true);
-      _fetchVideoDetail();
+      dio = widget.dio ?? await DioHelper.createDioWithCookies(enableDebug: true);
+      if (!mounted) return;
+      await _fetchVideoDetail();
     } catch (e) {
+      if (!mounted) return;
       setState(() {
         _error = 'Failed to initialize network client: $e';
         _isLoading = false;
@@ -47,38 +81,65 @@ class _PlayDetailPageState extends State<PlayDetailPage> {
     }
   }
 
+  void _openSettingsTab() {
+    NavigationHelper.switchTabGlobal(NavigationHelper.settingsTab);
+  }
+
+  void _openDownloadsTab() {
+    NavigationHelper.switchTabGlobal(NavigationHelper.downloadTab);
+  }
+
   Future<void> _fetchStreamToken(String playbackUrl, String title) async {
-    try {
-      // Show loading hint
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Getting streaming information: $title'),
-          duration: const Duration(seconds: 2),
-        ),
+    if (_isFetchingStream) return;
+    if (dio == null) {
+      AppNotificationService.instance.showError(
+        id: _streamNotificationId,
+        title: 'Failed to load stream',
+        description: 'Network client is not initialized yet.',
       );
-      final token = await Formula1Service.getValidSubscriptionToken();
-      if (token == null || token.isEmpty) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Need Logged in F1TV. 「 Settings - Login to F1TV 」'),
-              duration: Duration(seconds: 3),
-              backgroundColor: Colors.red,
-            ),
-          );
-        }
+      return;
+    }
+
+    setState(() => _isFetchingStream = true);
+    try {
+      AppNotificationService.instance.showLoading(
+        id: _streamNotificationId,
+        title: 'Getting streaming information...',
+        description: title,
+      );
+
+      String? token;
+      try {
+        token = await (widget.getSubscriptionToken?.call() ??
+            Formula1Service.getValidSubscriptionToken());
+      } catch (_) {
+        AppNotificationService.instance.showError(
+          id: _streamNotificationId,
+          title: 'F1TV sign-in required',
+          description: 'Please sign in to F1TV in Settings.',
+          actionLabel: 'Settings',
+          onAction: _openSettingsTab,
+        );
         return;
       }
-      await _fetchStreamData(playbackUrl, token, title);
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Need Logged in F1TV. 「 Settings - Login to F1TV 」'),
-            duration: Duration(seconds: 3),
-            backgroundColor: Colors.red,
-          ),
+
+      if (token == null || token.isEmpty) {
+        AppNotificationService.instance.showError(
+          id: _streamNotificationId,
+          title: 'F1TV sign-in required',
+          description: 'Please sign in to F1TV in Settings.',
+          actionLabel: 'Settings',
+          onAction: _openSettingsTab,
         );
+        return;
+      }
+
+      await _fetchStreamData(playbackUrl, token, title);
+    } finally {
+      if (mounted) {
+        setState(() => _isFetchingStream = false);
+      } else {
+        _isFetchingStream = false;
       }
     }
   }
@@ -130,107 +191,114 @@ class _PlayDetailPageState extends State<PlayDetailPage> {
       if (response.statusCode == 200) {
         print('Streaming data retrieved successfully');
         final responseData = response.data;
+        if (responseData is! Map) {
+          AppNotificationService.instance.showError(
+            id: _streamNotificationId,
+            title: 'Invalid streaming response',
+            description: 'Unexpected response format returned by F1TV.',
+          );
+          return;
+        }
         try {
-          final streamUrl = responseData['resultObj']?['url']?.toString();
-          final laUrl = responseData['resultObj']?['laUrl']?.toString();
-          if (streamUrl != null) {
-            if (laUrl != null) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text(
-                    'The content is currently under DRM, please try again in a few hours',
-                  ),
-                  duration: const Duration(seconds: 3),
-                  backgroundColor: Colors.red,
-                ),
-              );
-            } else {
-              // Request the m3u8 content first
-              await _fetchAndParseM3u8Content(streamUrl, title);
-            }
-          } else {
-            final msg = responseData['message']?.toString();
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text(msg ?? 'Failed to load stream URL'),
-                duration: const Duration(seconds: 5),
-              ),
+          final resultObj = responseData['resultObj'];
+          final streamUrl = resultObj is Map
+              ? resultObj['url']?.toString().trim()
+              : null;
+          final laUrl = resultObj is Map
+              ? resultObj['laUrl']?.toString().trim()
+              : null;
+          final hasStreamUrl =
+              streamUrl != null &&
+              streamUrl.isNotEmpty &&
+              streamUrl.toLowerCase() != 'null';
+          final hasDrm =
+              laUrl != null &&
+              laUrl.isNotEmpty &&
+              laUrl.toLowerCase() != 'null';
+
+          if (!hasStreamUrl) {
+            final msg =
+                responseData['message']?.toString().trim() ??
+                responseData['errorDescription']?.toString().trim();
+            final description =
+                (msg != null && msg.isNotEmpty && msg.toLowerCase() != 'null')
+                ? msg
+                : 'Failed to load stream URL.';
+            AppNotificationService.instance.showError(
+              id: _streamNotificationId,
+              title: 'Failed to load stream',
+              description: description,
             );
+            return;
           }
+
+          if (hasDrm) {
+            AppNotificationService.instance.showError(
+              id: _streamNotificationId,
+              title: 'Content is DRM protected',
+              description:
+                  'The content is currently under DRM, please try again in a few hours.',
+            );
+            return;
+          }
+
+          // Request the m3u8 content first
+          await _fetchAndParseM3u8Content(streamUrl, title);
         } catch (e) {
           print('Failed to parse response data: $e');
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Failed to parse streaming data: $e'),
-              duration: const Duration(seconds: 5),
-            ),
+          AppNotificationService.instance.showError(
+            id: _streamNotificationId,
+            title: 'Failed to parse streaming data',
+            description: AppNotificationService.formatError(e),
           );
         }
       } else {
         print('Streaming data request failed: ${response.statusCode}');
-
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              'Failed to get streaming data: ${response.statusCode}',
-            ),
-            duration: const Duration(seconds: 2),
-          ),
+        AppNotificationService.instance.showError(
+          id: _streamNotificationId,
+          title: 'Failed to get streaming data',
+          description: 'Server returned HTTP ${response.statusCode}.',
         );
       }
     } on DioException catch (e) {
       print('Streaming data request exception: $e');
-      if (e.response != null) {
-        // Server returned error
-        final statusCode = e.response!.statusCode;
-        final errorData = e.response!.data;
-        print('Status code: $statusCode');
-        if (statusCode == 401 && !hasRetried) {
-          final refreshedData = await Formula1Service.refreshToken();
-          final refreshedToken =
-              refreshedData?['data']?['subscriptionToken'] as String?;
-          if (refreshedToken != null && refreshedToken.isNotEmpty) {
-            await _fetchStreamData(
-              playbackUrl,
-              refreshedToken,
-              title,
-              hasRetried: true,
-            );
-            return;
-          }
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text(
-                  'F1TV session expired. Please sign in again in Settings.',
-                ),
-                duration: Duration(seconds: 3),
-                backgroundColor: Colors.red,
-              ),
-            );
-          }
-        } else {
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text('Failed to get streaming data: $errorData'),
-                duration: const Duration(seconds: 2),
-              ),
-            );
-          }
-        }
-      } else {
-        // Other errors
-        print('Unknown error: $e');
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Failed to get streaming data: $e'),
-              duration: const Duration(seconds: 2),
-            ),
+      final statusCode = e.response?.statusCode;
+      if (statusCode == 401 && !hasRetried) {
+        final refreshedData = await (widget.refreshToken?.call() ??
+            Formula1Service.refreshToken());
+        final refreshedToken =
+            refreshedData?['data']?['subscriptionToken'] as String?;
+        if (refreshedToken != null && refreshedToken.isNotEmpty) {
+          await _fetchStreamData(
+            playbackUrl,
+            refreshedToken,
+            title,
+            hasRetried: true,
           );
+          return;
         }
+        AppNotificationService.instance.showError(
+          id: _streamNotificationId,
+          title: 'F1TV session expired',
+          description: 'Please sign in again in Settings.',
+          actionLabel: 'Settings',
+          onAction: _openSettingsTab,
+        );
+        return;
       }
+
+      AppNotificationService.instance.showError(
+        id: _streamNotificationId,
+        title: 'Failed to get streaming data',
+        description: AppNotificationService.formatError(e),
+      );
+    } catch (e) {
+      print('Unexpected error getting streaming data: $e');
+      AppNotificationService.instance.showError(
+        id: _streamNotificationId,
+        title: 'Failed to get streaming data',
+        description: AppNotificationService.formatError(e),
+      );
     }
   }
 
@@ -258,6 +326,8 @@ class _PlayDetailPageState extends State<PlayDetailPage> {
         ),
       );
 
+      if (!mounted) return;
+
       if (response.statusCode == 200) {
         final data = response.data;
 
@@ -277,6 +347,7 @@ class _PlayDetailPageState extends State<PlayDetailPage> {
         });
       }
     } catch (e) {
+      if (!mounted) return;
       setState(() {
         _error = e.toString();
         _isLoading = false;
@@ -292,98 +363,173 @@ class _PlayDetailPageState extends State<PlayDetailPage> {
     await _fetchStreamToken('CONTENT/PLAY?contentId=${widget.itemId}', title);
   }
 
+  String _sanitizeFileNamePart(String raw, String fallback) {
+    final cleaned = raw
+        .replaceAll(RegExp(r'[<>:"/\\|?*]'), '_')
+        .replaceAll(RegExp(r'\s+'), '_')
+        .replaceAll(RegExp(r'_+'), '_')
+        .replaceAll(RegExp(r'^[._]+|[._]+$'), '')
+        .trim();
+    return cleaned.isEmpty ? fallback : cleaned;
+  }
+
+  String _resolveCoverExtension(Uri uri, String? contentType) {
+    final ext = path.extension(uri.path).toLowerCase();
+    if (_imageExtensions.contains(ext)) {
+      return ext;
+    }
+    final lowerType = contentType?.toLowerCase() ?? '';
+    if (lowerType.contains('image/png')) return '.png';
+    if (lowerType.contains('image/webp')) return '.webp';
+    if (lowerType.contains('image/gif')) return '.gif';
+    if (lowerType.contains('image/bmp')) return '.bmp';
+    if (lowerType.contains('image/avif')) return '.avif';
+    return '.jpg';
+  }
+
+  Future<void> _revealSavedFile(String filePath, String folderPath) async {
+    if (widget.onRevealFile != null) {
+      await widget.onRevealFile!(filePath, folderPath);
+      return;
+    }
+
+    if (Platform.isMacOS) {
+      final result = await Process.run('open', ['-R', filePath]);
+      if (result.exitCode == 0) return;
+      final fallback = await Process.run('open', [folderPath]);
+      if (fallback.exitCode != 0) {
+        throw Exception('Could not open folder: $folderPath');
+      }
+      return;
+    }
+
+    if (Platform.isWindows) {
+      if (File(filePath).existsSync()) {
+        await Process.run('explorer', ['/select,$filePath']);
+      } else {
+        await Process.run('explorer', [folderPath]);
+      }
+      return;
+    }
+
+    if (Platform.isLinux) {
+      final result = await Process.run('xdg-open', [folderPath]);
+      if (result.exitCode == 0) return;
+    }
+
+    final opened = await launchUrl(
+      Uri.directory(folderPath),
+      mode: LaunchMode.externalApplication,
+    );
+    if (!opened) {
+      throw Exception('Could not open folder: $folderPath');
+    }
+  }
+
   /// Download cover image
   Future<void> _downloadCover(String imageUrl, String title) async {
+    if (_isDownloadingCover) return;
+    if (imageUrl.trim().isEmpty) {
+      AppNotificationService.instance.showError(
+        id: _coverNotificationId,
+        title: 'Cover download failed',
+        description: 'No cover image URL is available.',
+      );
+      return;
+    }
+    if (dio == null) {
+      AppNotificationService.instance.showError(
+        id: _coverNotificationId,
+        title: 'Cover download failed',
+        description: 'Network client is not initialized yet.',
+      );
+      return;
+    }
+
+    setState(() => _isDownloadingCover = true);
     try {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Starting cover download...'),
-          duration: Duration(seconds: 2),
-        ),
+      AppNotificationService.instance.showLoading(
+        id: _coverNotificationId,
+        title: 'Downloading cover image...',
+        description: title,
       );
 
-      // Get download path
-      final downloadPath = await DownloadService.getDownloadPath();
-
-      // Clean filename, remove unsafe characters
-      final cleanTitle = title
-          .replaceAll(RegExp(r'[<>:"/\\|?*]'), '_')
-          .replaceAll(RegExp(r'\s+'), '_')
-          .trim();
-
-      // Get image extension
+      final downloadPath = await (widget.getDownloadPath?.call() ??
+          DownloadService.getDownloadPath());
+      final cleanTitle = _sanitizeFileNamePart(
+        title,
+        'cover_${widget.itemId}',
+      );
       final uri = Uri.parse(imageUrl);
-      String extension = path.extension(uri.path);
-      if (extension.isEmpty) {
-        extension = '.jpg'; // Default to jpg extension
-      }
-
-      // Build filename
-      final fileName = '${cleanTitle}_cover$extension';
-      final filePath = path.join(downloadPath, fileName);
 
       print('Downloading cover from: $imageUrl');
-      print('Saving to: $filePath');
 
-      // Download image
-      if (dio == null) {
-        throw Exception('Network client not initialized');
-      }
-      final response = await dio!.get(
+      final response = await dio!.get<List<int>>(
         imageUrl,
         options: Options(responseType: ResponseType.bytes),
       );
 
-      // Save file
-      final file = File(filePath);
-      await file.writeAsBytes(response.data);
-
-      // Show success message
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Cover download successful: $fileName'),
-            backgroundColor: Colors.green,
-            duration: const Duration(seconds: 3),
-            action: SnackBarAction(
-              label: 'View',
-              textColor: Colors.white,
-              onPressed: () {
-                // Could add functionality to open folder
-                print('Cover saved to: $filePath');
-              },
-            ),
-          ),
+      final bytes = response.data;
+      if (response.statusCode != 200 || bytes == null || bytes.isEmpty) {
+        throw Exception(
+          'Received empty or invalid image response (${response.statusCode}).',
         );
       }
+
+      final extension = _resolveCoverExtension(
+        uri,
+        response.headers.value('content-type'),
+      );
+      final fileName = '${cleanTitle}_cover$extension';
+      final filePath = path.join(downloadPath, fileName);
+      print('Saving to: $filePath');
+
+      final targetDir = Directory(downloadPath);
+      if (!targetDir.existsSync()) {
+        await targetDir.create(recursive: true);
+      }
+
+      final file = File(filePath);
+      await file.writeAsBytes(bytes);
+
+      AppNotificationService.instance.showSuccess(
+        id: _coverNotificationId,
+        title: 'Cover saved',
+        description: fileName,
+        actionLabel: 'Open Folder',
+        onAction: () => _revealSavedFile(filePath, downloadPath),
+      );
     } catch (e) {
       print('Error downloading cover: $e');
+      AppNotificationService.instance.showError(
+        id: _coverNotificationId,
+        title: 'Cover download failed',
+        description: AppNotificationService.formatError(e),
+      );
+    } finally {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Cover download failed: $e'),
-            backgroundColor: Colors.red,
-            duration: const Duration(seconds: 3),
-          ),
-        );
+        setState(() => _isDownloadingCover = false);
+      } else {
+        _isDownloadingCover = false;
       }
     }
   }
 
   /// Fetch and parse M3U8 content
   Future<void> _fetchAndParseM3u8Content(String streamUrl, String title) async {
-    // Show loading dialog
-    BuildContext? dialogContext;
-    showDialog(
+    if (!mounted) return;
+    AppNotificationService.instance.dismiss(_streamNotificationId);
+
+    final navigator = Navigator.of(context);
+    final loadingRoute = DialogRoute<void>(
       context: context,
       barrierDismissible: false,
-      builder: (BuildContext context) {
-        dialogContext = context;
-        return AlertDialog(
-          title: const Text('Loading stream options'),
+      builder: (BuildContext ctx) {
+        return const AlertDialog(
+          title: Text('Loading stream options'),
           content: Column(
             mainAxisSize: MainAxisSize.min,
-            children: const [
+            children: [
               CircularProgressIndicator(),
               SizedBox(height: 16),
               Text('Fetching available stream options...'),
@@ -392,9 +538,15 @@ class _PlayDetailPageState extends State<PlayDetailPage> {
         );
       },
     );
+    navigator.push(loadingRoute);
+
+    void closeLoadingDialog() {
+      if (loadingRoute.isActive) {
+        navigator.removeRoute(loadingRoute);
+      }
+    }
 
     try {
-      // Request the m3u8 content
       if (dio == null) {
         throw Exception('Network client not initialized');
       }
@@ -403,35 +555,34 @@ class _PlayDetailPageState extends State<PlayDetailPage> {
         options: Options(responseType: ResponseType.plain),
       );
 
-      // Close loading dialog
-      if (mounted && dialogContext != null) {
-        Navigator.pop(dialogContext!);
-      }
+      closeLoadingDialog();
+
+      if (!mounted) return;
 
       if (response.statusCode == 200) {
-        final m3u8Content = response.data.toString();
-        _showDownloadOptionsDialog(m3u8Content, streamUrl, title);
+        final m3u8Content = response.data?.toString() ?? '';
+        if (m3u8Content.trim().isEmpty) {
+          AppNotificationService.instance.showError(
+            id: _streamNotificationId,
+            title: 'Failed to fetch stream options',
+            description: 'Stream playlist was empty.',
+          );
+          return;
+        }
+        await _showDownloadOptionsDialog(m3u8Content, streamUrl, title);
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              'Failed to fetch stream options: ${response.statusCode}',
-            ),
-            duration: const Duration(seconds: 3),
-          ),
+        AppNotificationService.instance.showError(
+          id: _streamNotificationId,
+          title: 'Failed to fetch stream options',
+          description: 'Server returned HTTP ${response.statusCode}.',
         );
       }
     } catch (e) {
-      // Close loading dialog if still showing
-      if (mounted && dialogContext != null) {
-        Navigator.pop(dialogContext!);
-      }
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Error fetching stream options: $e'),
-          duration: const Duration(seconds: 3),
-        ),
+      closeLoadingDialog();
+      AppNotificationService.instance.showError(
+        id: _streamNotificationId,
+        title: 'Failed to fetch stream options',
+        description: AppNotificationService.formatError(e),
       );
     }
   }
@@ -493,9 +644,10 @@ class _PlayDetailPageState extends State<PlayDetailPage> {
       selectedRange = availableRanges.first['value']!;
     }
 
-    showDialog(
+    if (!mounted) return;
+    await showDialog<void>(
       context: context,
-      builder: (BuildContext context) {
+      builder: (BuildContext dialogContext) {
         return StatefulBuilder(
           builder: (context, setState) {
             return AlertDialog(
@@ -731,7 +883,7 @@ class _PlayDetailPageState extends State<PlayDetailPage> {
               ),
               actions: [
                 TextButton(
-                  onPressed: () => Navigator.of(context).pop(),
+                  onPressed: () => Navigator.of(dialogContext).pop(),
                   child: const Text('Cancel'),
                 ),
                 ElevatedButton(
@@ -745,8 +897,11 @@ class _PlayDetailPageState extends State<PlayDetailPage> {
                     await N_m3u8dlConfigService.setAudioLang(selectedAudioLang);
                     await N_m3u8dlConfigService.setRange(selectedRange);
 
-                    Navigator.of(context).pop();
-                    _startDownloadWithOptions(
+                    if (dialogContext.mounted) {
+                      Navigator.of(dialogContext).pop();
+                    }
+                    if (!mounted) return;
+                    await _startDownloadWithOptions(
                       streamUrl,
                       title,
                       selectedResolution,
@@ -994,7 +1149,7 @@ class _PlayDetailPageState extends State<PlayDetailPage> {
   }
 
   /// Start download with selected options
-  void _startDownloadWithOptions(
+  Future<void> _startDownloadWithOptions(
     String streamUrl,
     String title,
     String resolution,
@@ -1003,70 +1158,32 @@ class _PlayDetailPageState extends State<PlayDetailPage> {
     String format,
   ) async {
     try {
-      // Prepare extra arguments based on selected options
-      List<String> extraArgs = [];
-
-      final range = await N_m3u8dlConfigService.getRange();
-      String videoSelectParam;
-
-      if (range == 'auto') {
-        if (resolution == 'best') {
-          videoSelectParam = 'best';
-        } else {
-          videoSelectParam = 'res="${resolution}*":for=best';
-        }
-      } else {
-        if (resolution == 'best') {
-          videoSelectParam = ':range=$range:for=best';
-        } else {
-          videoSelectParam = 'res="${resolution}*":range=$range:for=best';
-        }
-      }
-
-      // Add resolution and range selection
-      if (videoSelectParam != 'best') {
-        extraArgs.add('-sv');
-        extraArgs.add(videoSelectParam);
-      }
-
-      // Add audio language selection
-      if (audioLang != 'eng') {
-        extraArgs.add('-sa');
-        extraArgs.add(audioLang);
-      }
-
-      // Add format and subtitle options
-      extraArgs.add('-M');
-      extraArgs.add('format=$format:muxer=ffmpeg:skip_sub=$skipSub');
-
       // Add to global download manager
-      final downloadManager = GlobalDownloadManager();
-      final taskId = await downloadManager.addDownloadTask(
-        url: streamUrl,
-        title: title,
-      );
+      final addTask =
+          widget.onAddDownloadTask ??
+          ({required String url, required String title}) =>
+              GlobalDownloadManager().addDownloadTask(url: url, title: title);
+      final taskId = await addTask(url: streamUrl, title: title);
 
       // Show download progress
       _showDownloadProgress(taskId, title);
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Failed to start download: $e'),
-          duration: const Duration(seconds: 3),
-        ),
+      AppNotificationService.instance.showError(
+        id: _streamNotificationId,
+        title: 'Failed to start download',
+        description: AppNotificationService.formatError(e),
       );
     }
   }
 
   /// Show download progress
   void _showDownloadProgress(String taskId, String title) {
-    final downloadManager = GlobalDownloadManager();
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Starting download: $title'),
-        duration: const Duration(seconds: 2),
-      ),
+    AppNotificationService.instance.showSuccess(
+      id: 'video_download_$taskId',
+      title: 'Added to download queue',
+      description: title,
+      actionLabel: 'Downloads',
+      onAction: _openDownloadsTab,
     );
   }
 
@@ -1202,12 +1319,23 @@ class _PlayDetailPageState extends State<PlayDetailPage> {
                         borderRadius: BorderRadius.circular(20),
                       ),
                       child: IconButton(
-                        onPressed: () => _downloadCover(imageUrl, title),
-                        icon: const Icon(
-                          Icons.download,
-                          color: Colors.white,
-                          size: 20,
-                        ),
+                        onPressed: _isDownloadingCover
+                            ? null
+                            : () => _downloadCover(imageUrl, title),
+                        icon: _isDownloadingCover
+                            ? const SizedBox(
+                                width: 18,
+                                height: 18,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: Colors.white,
+                                ),
+                              )
+                            : const Icon(
+                                Icons.download,
+                                color: Colors.white,
+                                size: 20,
+                              ),
                         tooltip: 'Download Cover',
                       ),
                     ),
@@ -1263,7 +1391,9 @@ class _PlayDetailPageState extends State<PlayDetailPage> {
             SizedBox(
               width: double.infinity,
               child: ElevatedButton.icon(
-                onPressed: () => _downloadMainVideo(title),
+                onPressed: _isFetchingStream
+                    ? null
+                    : () => _downloadMainVideo(title),
                 icon: const Icon(Icons.download),
                 label: const Text('Download Video'),
                 style: ElevatedButton.styleFrom(
@@ -1351,17 +1481,17 @@ class _PlayDetailPageState extends State<PlayDetailPage> {
       ),
       trailing: const Icon(Icons.download),
       onTap: () async {
-        final playbackUrl = stream['playbackUrl']?.toString() ?? '';
-        final t = _metadata!['title']?.toString();
-        String titlev2 = '$t-$title';
+        if (_isFetchingStream) return;
+        final playbackUrl = stream['playbackUrl']?.toString().trim() ?? '';
+        final mainTitle = _metadata?['title']?.toString().trim() ?? '';
+        final streamTitle = mainTitle.isNotEmpty ? '$mainTitle-$title' : title;
         if (playbackUrl.isNotEmpty) {
-          await _fetchStreamToken(playbackUrl, titlev2);
+          await _fetchStreamToken(playbackUrl, streamTitle);
         } else {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('No playback URL available for: $title'),
-              duration: const Duration(seconds: 2),
-            ),
+          AppNotificationService.instance.showError(
+            id: _streamNotificationId,
+            title: 'Unavailable stream',
+            description: 'No playback URL available for: $title',
           );
         }
       },

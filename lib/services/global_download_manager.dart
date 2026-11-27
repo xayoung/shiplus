@@ -4,6 +4,8 @@ import '../models/download_progress.dart';
 import '../models/download_task.dart';
 import '../models/download_status_tracker.dart';
 import '../ffi/n_m3u8dl_re.dart';
+import '../widgets/main_layout.dart';
+import 'app_notification_service.dart';
 import 'download_service.dart';
 
 class GlobalDownloadManager extends ChangeNotifier {
@@ -17,6 +19,7 @@ class GlobalDownloadManager extends ChangeNotifier {
   final Map<String, StreamController<DownloadProgress>> _progressControllers =
       {};
   final Map<String, DownloadStatusTracker> _statusTrackers = {};
+  int _taskSequence = 0;
 
   List<DownloadTask> get downloadTasks => List.unmodifiable(_downloadTasks);
 
@@ -33,7 +36,8 @@ class GlobalDownloadManager extends ChangeNotifier {
     required String title,
     String? customFileName,
   }) async {
-    final taskId = DateTime.now().millisecondsSinceEpoch.toString();
+    final taskId =
+        '${DateTime.now().microsecondsSinceEpoch}_${++_taskSequence}';
     final fileName = customFileName ?? _sanitizeFileName(title);
 
     final task = DownloadTask(
@@ -109,6 +113,14 @@ class GlobalDownloadManager extends ChangeNotifier {
           completedAt: DateTime.now(),
         );
         notifyListeners();
+        AppNotificationService.instance.showSuccess(
+          id: 'video_download_$taskId',
+          title: 'Download completed',
+          description: task.title,
+          actionLabel: 'Downloads',
+          onAction: () =>
+              NavigationHelper.switchTabGlobal(NavigationHelper.downloadTab),
+        );
       }
 
       _logControllers[taskId]?.add('🎉 Download complete: ${task.title}');
@@ -120,6 +132,15 @@ class GlobalDownloadManager extends ChangeNotifier {
           error: e.toString(),
         );
         notifyListeners();
+        AppNotificationService.instance.showError(
+          id: 'video_download_$taskId',
+          title: 'Download failed',
+          description:
+              '${task.title}: ${AppNotificationService.formatError(e)}',
+          actionLabel: 'Downloads',
+          onAction: () =>
+              NavigationHelper.switchTabGlobal(NavigationHelper.downloadTab),
+        );
       }
 
       _logControllers[taskId]?.add('❌ Download failed: ${e.toString()}');
@@ -140,6 +161,7 @@ class GlobalDownloadManager extends ChangeNotifier {
       _logControllers[taskId]?.add('⏹️ Download cancelled and task removed');
     }
 
+    AppNotificationService.instance.dismiss('video_download_$taskId');
     removeDownloadTask(taskId);
   }
 

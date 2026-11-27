@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 import 'package:flutter/services.dart';
 import '../models/download_progress.dart';
+import '../services/app_notification_service.dart';
 import '../services/download_service.dart';
 
 class DownloadPage extends StatefulWidget {
@@ -64,14 +65,16 @@ class _DownloadPageState extends State<DownloadPage> {
   }
 
   void _showSuccessSnackBar(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message), backgroundColor: Colors.green),
+    AppNotificationService.instance.showSuccess(
+      id: 'download_page_notice',
+      title: message,
     );
   }
 
   void _showErrorSnackBar(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message), backgroundColor: Colors.red),
+    AppNotificationService.instance.showError(
+      id: 'download_page_notice',
+      title: message,
     );
   }
 

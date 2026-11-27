@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
+import '../services/app_notification_service.dart';
 import '../services/global_download_manager.dart';
 import '../models/download_task.dart';
 import 'ui/shiplus_ui.dart';
@@ -13,12 +14,10 @@ class DownloadManagerPage extends StatefulWidget {
 
 class _DownloadManagerPageState extends State<DownloadManagerPage> {
   void _showSuccessSnackBar(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: Colors.green,
-        duration: const Duration(seconds: 2),
-      ),
+    AppNotificationService.instance.showSuccess(
+      id: 'download_manager_action',
+      title: message,
+      duration: const Duration(seconds: 2),
     );
   }
 
